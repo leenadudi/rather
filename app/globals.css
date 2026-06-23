@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --background: #F8F7F5;
+  --foreground: #1A1A1A;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* debate message bubbles */
+.bubble-a {
+  background: #E6F1FB;
+  border-radius: 12px 12px 12px 4px;
+}
+.bubble-b {
+  background: #EEEDFE;
+  border-radius: 12px 12px 4px 12px;
+}
+
+/* result bar animation helper */
+.bar-animated {
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+}
