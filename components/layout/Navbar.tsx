@@ -8,44 +8,82 @@ import { supabase } from "@/lib/supabase";
 export function Navbar() {
   const pathname = usePathname();
   const [userId, setUserId] = useState<string | null>(null);
+  const [initials, setInitials] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       setUserId(data.user?.id ?? null);
+      if (data.user) {
+        const { data: u } = await supabase
+          .from("users")
+          .select("username")
+          .eq("id", data.user.id)
+          .single();
+        if (u?.username) setInitials(u.username.slice(0, 2).toUpperCase());
+      }
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_e, session) => {
       setUserId(session?.user.id ?? null);
+      if (session?.user) {
+        const { data: u } = await supabase
+          .from("users")
+          .select("username")
+          .eq("id", session.user.id)
+          .single();
+        if (u?.username) setInitials(u.username.slice(0, 2).toUpperCase());
+      } else {
+        setInitials(null);
+      }
     });
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  const today = new Date();
+  const dateStr = today
+    .toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    .toLowerCase();
+
   return (
     <nav className="sticky top-0 z-40 bg-background border-b border-border-light">
-      <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-        <Link href="/" className="text-sm font-bold text-text-primary">
-          would you rather
+      <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+        {/* Left: logo + date */}
+        <Link href="/" className="flex items-center gap-2.5">
+          <span className="text-sm font-bold text-text-primary">would you rather</span>
+          <span className="text-sm text-text-muted">{dateStr}</span>
         </Link>
 
-        <div className="flex items-center gap-1">
+        {/* Center: nav links */}
+        <div className="flex items-center gap-7">
           <NavLink href="/" label="today" active={pathname === "/"} />
           <NavLink href="/history" label="history" active={pathname.startsWith("/history")} />
           <NavLink href="/you" label="you" active={pathname.startsWith("/you")} />
-          <NavLink href="/friends" label="friends" active={pathname.startsWith("/friends")} />
+        </div>
 
+        {/* Right: user state */}
+        <div className="flex items-center gap-2">
           {userId ? (
             <button
               onClick={() => supabase.auth.signOut()}
-              className="ml-3 text-xs text-text-muted hover:text-text-secondary"
+              className="w-8 h-8 rounded-full bg-dark text-white text-xs font-bold flex items-center justify-center hover:bg-text-secondary transition-colors"
+              title="sign out"
             >
-              sign out
+              {initials ?? "?"}
             </button>
           ) : (
-            <Link
-              href="/signup"
-              className="ml-3 px-3 py-1.5 bg-dark text-white text-xs font-semibold rounded-lg hover:bg-text-secondary transition-colors"
-            >
-              sign up
-            </Link>
+            <>
+              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-side-b-bg rounded-full">
+                <svg className="w-3 h-3 text-side-b" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
+                </svg>
+                <span className="text-xs text-side-b font-medium">anonymous</span>
+              </div>
+              <Link
+                href="/signin"
+                className="px-4 py-1.5 bg-dark text-white text-xs font-semibold rounded-full hover:bg-text-secondary transition-colors"
+              >
+                sign in
+              </Link>
+            </>
           )}
         </div>
       </div>
@@ -57,8 +95,10 @@ function NavLink({ href, label, active }: { href: string; label: string; active:
   return (
     <Link
       href={href}
-      className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
-        active ? "bg-dark text-white" : "text-text-secondary hover:bg-border-light"
+      className={`text-sm font-medium pb-0.5 transition-colors ${
+        active
+          ? "text-text-primary border-b-2 border-text-primary"
+          : "text-text-secondary hover:text-text-primary"
       }`}
     >
       {label}

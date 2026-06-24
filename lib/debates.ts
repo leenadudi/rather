@@ -17,8 +17,7 @@ export async function joinDebateQueue(
     .select("*")
     .eq("question_id", questionId)
     .eq("status", "waiting")
-    .not(waitingCol, "is", null)
-    .or(`${waitingDevCol}.neq.null`)
+    .or(`${waitingCol}.not.is.null,${waitingDevCol}.not.is.null`)
     .limit(1)
     .single();
 
