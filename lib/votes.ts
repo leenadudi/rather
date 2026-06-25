@@ -1,25 +1,5 @@
 import { supabase } from "./supabase";
-import type { Choice, Vote, VoteCounts } from "@/types";
-
-export async function castVote(
-  questionId: string,
-  choice: Choice,
-  userId: string
-): Promise<{ vote: Vote | null; error: string | null }> {
-  const { data, error } = await supabase
-    .from("votes")
-    .upsert(
-      { question_id: questionId, choice, user_id: userId },
-      { onConflict: "question_id,user_id", ignoreDuplicates: true }
-    )
-    .select()
-    .single();
-
-  if (error && error.code !== "23505") {
-    return { vote: null, error: error.message };
-  }
-  return { vote: data as Vote, error: null };
-}
+import type { Choice, VoteCounts } from "@/types";
 
 export async function getMyVote(
   questionId: string,

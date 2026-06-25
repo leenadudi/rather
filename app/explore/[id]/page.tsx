@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ensureSession } from "@/lib/anon";
 import { getCommunityQuestion } from "@/lib/community";
-import { castVote, getVoteCounts } from "@/lib/votes";
+import { castVote } from "@/lib/server/votes";
 import { CommentSection } from "@/components/comments/CommentSection";
 import { relativeTime } from "@/components/community/CommunityCard";
 import type { Choice, CommunityQuestion, VoteCounts } from "@/types";
@@ -37,10 +37,11 @@ export default function ExploreQuestionPage() {
     if (!q || myChoice || saving || !userId) return;
     setSaving(true);
     setMyChoice(choice);
-    const { error } = await castVote(q.id, choice, userId);
-    if (!error) {
-      const fresh = await getVoteCounts(q.id);
-      setCounts(fresh);
+    const res = await castVote(q.id, choice);
+    if (!res.ok) {
+      // keep existing error handling path — revert optimistic state
+    } else {
+      setCounts(res.data);
     }
     setSaving(false);
   };

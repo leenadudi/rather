@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { getTodayQuestion, getRecentQuestions } from "@/lib/questions";
-import { castVote, getMyVote, getVoteCounts } from "@/lib/votes";
+import { getMyVote, getVoteCounts } from "@/lib/votes";
+import { castVote } from "@/lib/server/votes";
 import { ensureSession } from "@/lib/anon";
 import { getQueueCounts } from "@/lib/debates";
 import { getCommentCount } from "@/lib/comments";
@@ -141,15 +142,14 @@ export default function HomePage() {
     setSaving(choice);
     setSaveError(false);
     setPendingChoice(choice);
-    const { error } = await castVote(question.id, choice, userId);
-    if (error) {
+    const res = await castVote(question.id, choice);
+    if (!res.ok) {
       setSaveError(true);
       setSaving(null);
     } else {
       setSaving(null);
       setPendingChoice(null);
-      const fresh = await getVoteCounts(question.id);
-      setCounts(fresh);
+      setCounts(res.data);
     }
   }, [question, myChoice, userId]);
 
@@ -157,13 +157,14 @@ export default function HomePage() {
     if (!question || !pendingChoice || !userId) return;
     setSaveError(false);
     setSaving(pendingChoice);
-    const { error } = await castVote(question.id, pendingChoice, userId);
-    if (error) { setSaveError(true); setSaving(null); }
-    else {
+    const res = await castVote(question.id, pendingChoice);
+    if (!res.ok) {
+      setSaveError(true);
+      setSaving(null);
+    } else {
       setSaving(null);
       setPendingChoice(null);
-      const fresh = await getVoteCounts(question.id);
-      setCounts(fresh);
+      setCounts(res.data);
     }
   }, [question, pendingChoice, userId]);
 

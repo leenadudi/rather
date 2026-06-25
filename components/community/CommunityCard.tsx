@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Choice, CommunityQuestion, VoteCounts } from "@/types";
-import { castVote, getVoteCounts } from "@/lib/votes";
+import { castVote } from "@/lib/server/votes";
 
 interface Props {
   question: CommunityQuestion;
@@ -41,10 +41,11 @@ export function CommunityCard({ question, userId }: Props) {
       const total = a + b;
       return { a, b, total, pct_a: Math.round((a / total) * 100), pct_b: Math.round((b / total) * 100) };
     });
-    const { error } = await castVote(question.id, choice, userId);
-    if (!error) {
-      const fresh = await getVoteCounts(question.id);
-      setCounts(fresh);
+    const res = await castVote(question.id, choice);
+    if (!res.ok) {
+      // keep existing error handling path
+    } else {
+      setCounts(res.data);
     }
     setSaving(false);
   };
