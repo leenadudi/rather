@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { makePrediction } from "@/lib/server/social";
+import { useAccountGate } from "@/components/auth/useRequireAccount";
 import type { Choice } from "@/types";
 
 interface FriendVote {
@@ -24,6 +25,7 @@ function short(text: string, max = 14) {
 }
 
 export function GroupSidebar({ questionId, myChoice, optionA, optionB }: Props) {
+  const gate = useAccountGate();
   const [userId, setUserId] = useState<string | null>(null);
   const [myUsername, setMyUsername] = useState<string | null>(null);
   const [friendVotes, setFriendVotes] = useState<FriendVote[]>([]);
@@ -96,7 +98,8 @@ export function GroupSidebar({ questionId, myChoice, optionA, optionB }: Props) 
 
   const handlePredict = async (targetId: string, choice: Choice) => {
     if (!userId) return;
-    await makePrediction(targetId, questionId, choice);
+    const res = gate(await makePrediction(targetId, questionId, choice));
+    if (!res.ok) return;
     setPredictions((p) => ({ ...p, [targetId]: choice }));
   };
 

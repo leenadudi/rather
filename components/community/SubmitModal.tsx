@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { submitCommunityQuestion } from "@/lib/server/community";
+import { useAccountGate } from "@/components/auth/useRequireAccount";
 
 interface Props {
   onClose: () => void;
@@ -10,6 +11,7 @@ interface Props {
 
 export function SubmitModal({ onClose }: Props) {
   const router = useRouter();
+  const gate = useAccountGate();
   const [optionA, setOptionA] = useState("");
   const [optionB, setOptionB] = useState("");
   const [error, setError] = useState("");
@@ -24,7 +26,7 @@ export function SubmitModal({ onClose }: Props) {
 
     setLoading(true);
     setError("");
-    const res = await submitCommunityQuestion(a, b);
+    const res = gate(await submitCommunityQuestion(a, b));
     if (!res.ok) {
       setError(res.error ?? "couldn't post — try again");
       setLoading(false);

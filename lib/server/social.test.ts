@@ -1,14 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { ActionError } from "@/lib/server/result";
 
-const { ensureAnonUser, friendInsert, selectSingle, respondUpdate, predUpsert } = vi.hoisted(() => ({
-  ensureAnonUser: vi.fn(),
+const { requireAccount, friendInsert, selectSingle, respondUpdate, predUpsert } = vi.hoisted(() => ({
+  requireAccount: vi.fn(),
   friendInsert: vi.fn(),
   selectSingle: vi.fn(),
   respondUpdate: vi.fn(),
   predUpsert: vi.fn(),
 }));
 
-vi.mock("@/lib/server/auth", () => ({ ensureAnonUser }));
+vi.mock("@/lib/server/auth", () => ({ requireAccount }));
 vi.mock("@/lib/server/supabase", () => ({
   createServiceSupabase: () => ({
     from: (table: string) => ({
@@ -38,8 +39,8 @@ vi.mock("@/lib/server/supabase", () => ({
 import { sendFriendRequest, respondToFriendRequest, makePrediction } from "@/lib/server/social";
 
 beforeEach(() => {
-  [ensureAnonUser, friendInsert, selectSingle, respondUpdate, predUpsert].forEach((m) => m.mockReset());
-  ensureAnonUser.mockResolvedValue({ id: "u1", isAnonymous: false });
+  [requireAccount, friendInsert, selectSingle, respondUpdate, predUpsert].forEach((m) => m.mockReset());
+  requireAccount.mockResolvedValue({ id: "u1", isAnonymous: false });
 });
 
 describe("sendFriendRequest", () => {
@@ -54,6 +55,13 @@ describe("sendFriendRequest", () => {
       expect.objectContaining({ from_user_id: "u1", to_user_id: "22222222-2222-2222-2222-222222222222" })
     );
     expect(r.ok).toBe(true);
+  });
+  it("returns account_required and performs no write when requireAccount rejects", async () => {
+    requireAccount.mockRejectedValue(new ActionError("account_required", "you need an account to do that"));
+    const r = await sendFriendRequest("22222222-2222-2222-2222-222222222222");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("account_required");
+    expect(friendInsert).not.toHaveBeenCalled();
   });
 });
 

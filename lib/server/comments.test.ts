@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { ActionError } from "@/lib/server/result";
 
-const { ensureAnonUser, insert, rpc } = vi.hoisted(() => ({
-  ensureAnonUser: vi.fn(),
+const { requireAccount, insert, rpc } = vi.hoisted(() => ({
+  requireAccount: vi.fn(),
   insert: vi.fn(),
   rpc: vi.fn(),
 }));
-vi.mock("@/lib/server/auth", () => ({ ensureAnonUser }));
+vi.mock("@/lib/server/auth", () => ({ requireAccount }));
 vi.mock("@/lib/server/supabase", () => ({
   createServiceSupabase: () => ({
     from: (table: string) => ({
@@ -21,8 +22,8 @@ vi.mock("@/lib/server/supabase", () => ({
 import { postComment, likeComment } from "@/lib/server/comments";
 
 beforeEach(() => {
-  [ensureAnonUser, insert, rpc].forEach((m) => m.mockReset());
-  ensureAnonUser.mockResolvedValue({ id: "u1", isAnonymous: false });
+  [requireAccount, insert, rpc].forEach((m) => m.mockReset());
+  requireAccount.mockResolvedValue({ id: "u1", isAnonymous: false });
   rpc.mockResolvedValue({ error: null });
 });
 
@@ -36,6 +37,13 @@ describe("postComment", () => {
     const r = await postComment("11111111-1111-1111-1111-111111111111", "hi", "A");
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ content: "hi", user_id: "u1", choice: "A" }));
     expect(r.ok).toBe(true);
+  });
+  it("returns account_required and performs no write when requireAccount rejects", async () => {
+    requireAccount.mockRejectedValue(new ActionError("account_required", "you need an account to do that"));
+    const r = await postComment("11111111-1111-1111-1111-111111111111", "hi", "A");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("account_required");
+    expect(insert).not.toHaveBeenCalled();
   });
 });
 

@@ -1,7 +1,8 @@
 "use client";
 
 import type { Choice } from "@/types";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 interface Props {
   questionId: string;
@@ -10,8 +11,18 @@ interface Props {
 }
 
 export function DebateCTA({ questionId, myChoice, oppositeCount }: Props) {
+  const router = useRouter();
   const opposite: Choice = myChoice === "A" ? "B" : "A";
   const label = opposite === "A" ? "a" : "b";
+
+  const handleDebate = async () => {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user || data.user.is_anonymous) {
+      router.push("/signin");
+      return;
+    }
+    router.push(`/debate/queue?question=${questionId}&side=${myChoice}`);
+  };
 
   return (
     <div className="w-full bg-dark rounded-2xl p-5 flex items-center justify-between gap-4">
@@ -26,12 +37,12 @@ export function DebateCTA({ questionId, myChoice, oppositeCount }: Props) {
         </div>
         <p className="text-xs text-text-muted">5-minute live debate · no winner declared</p>
       </div>
-      <Link
-        href={`/debate/queue?question=${questionId}&side=${myChoice}`}
+      <button
+        onClick={handleDebate}
         className="shrink-0 bg-white text-dark text-sm font-semibold px-4 py-2 rounded-xl hover:bg-gray-100 transition-colors"
       >
         debate →
-      </Link>
+      </button>
     </div>
   );
 }

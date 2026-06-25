@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { ActionError } from "@/lib/server/result";
 
-const ensureAnonUser = vi.hoisted(() => vi.fn());
+const requireAccount = vi.hoisted(() => vi.fn());
 const rpc = vi.hoisted(() => vi.fn());
 const state: { debateRow: Record<string, unknown> | null; inserted: Record<string, unknown> | null } = { debateRow: null, inserted: null };
 
-vi.mock("@/lib/server/auth", () => ({ ensureAnonUser }));
+vi.mock("@/lib/server/auth", () => ({ requireAccount }));
 vi.mock("@/lib/server/supabase", () => ({
   createServiceSupabase: () => ({
     from: (table: string) => ({
@@ -24,11 +25,11 @@ vi.mock("@/lib/server/supabase", () => ({
 import { joinDebateQueue, sendDebateMessage } from "@/lib/server/debates";
 
 beforeEach(() => {
-  ensureAnonUser.mockReset();
+  requireAccount.mockReset();
   rpc.mockReset();
   state.debateRow = null;
   state.inserted = null;
-  ensureAnonUser.mockResolvedValue({ id: "ua", isAnonymous: false });
+  requireAccount.mockResolvedValue({ id: "ua", isAnonymous: false });
   rpc.mockResolvedValue({ data: [{ debate_id: "d1", matched: true }], error: null });
 });
 
@@ -56,6 +57,13 @@ describe("joinDebateQueue", () => {
       expect(r.data.debateId).toBe("d1");
       expect(r.data.matched).toBe(true);
     }
+  });
+  it("returns account_required and performs no rpc call when requireAccount rejects", async () => {
+    requireAccount.mockRejectedValue(new ActionError("account_required", "you need an account to do that"));
+    const r = await joinDebateQueue("11111111-1111-1111-1111-111111111111", "A");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("account_required");
+    expect(rpc).not.toHaveBeenCalled();
   });
 });
 

@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { ActionError } from "@/lib/server/result";
 
-const { ensureAnonUser, insert } = vi.hoisted(() => ({
-  ensureAnonUser: vi.fn(),
+const { requireAccount, insert } = vi.hoisted(() => ({
+  requireAccount: vi.fn(),
   insert: vi.fn(),
 }));
-vi.mock("@/lib/server/auth", () => ({ ensureAnonUser }));
+vi.mock("@/lib/server/auth", () => ({ requireAccount }));
 vi.mock("@/lib/server/supabase", () => ({
   createServiceSupabase: () => ({
     from: () => ({
@@ -19,9 +20,9 @@ vi.mock("@/lib/server/supabase", () => ({
 import { submitCommunityQuestion } from "@/lib/server/community";
 
 beforeEach(() => {
-  ensureAnonUser.mockReset();
+  requireAccount.mockReset();
   insert.mockReset();
-  ensureAnonUser.mockResolvedValue({ id: "u1", isAnonymous: false });
+  requireAccount.mockResolvedValue({ id: "u1", isAnonymous: false });
 });
 
 describe("submitCommunityQuestion", () => {
@@ -37,5 +38,12 @@ describe("submitCommunityQuestion", () => {
     );
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.data.id).toBe("q1");
+  });
+  it("returns account_required and performs no write when requireAccount rejects", async () => {
+    requireAccount.mockRejectedValue(new ActionError("account_required", "you need an account to do that"));
+    const r = await submitCommunityQuestion("cats forever", "dogs forever");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("account_required");
+    expect(insert).not.toHaveBeenCalled();
   });
 });

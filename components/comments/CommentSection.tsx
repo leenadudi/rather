@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useAccountGate } from "@/components/auth/useRequireAccount";
 import type { Choice, Comment } from "@/types";
 import { getComments, getReplies, type CommentSort, type CommentFilter } from "@/lib/comments";
 import { postComment, likeComment } from "@/lib/server/comments";
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function CommentSection({ questionId, myChoice, userId, optionA, optionB }: Props) {
+  const gate = useAccountGate();
   const [sort, setSort] = useState<CommentSort>("top");
   const [filter, setFilter] = useState<CommentFilter>("all");
   const [comments, setComments] = useState<Comment[]>([]);
@@ -39,7 +41,7 @@ export function CommentSection({ questionId, myChoice, userId, optionA, optionB 
   useEffect(() => { load(); }, [load]);
 
   const handlePost = async (content: string) => {
-    const res = await postComment(questionId, content, myChoice);
+    const res = gate(await postComment(questionId, content, myChoice));
     const created = res.ok ? res.data : null;
     if (created) {
       setComments((prev) => [{ ...created, likes: 0, replies: [] }, ...prev]);
@@ -47,7 +49,8 @@ export function CommentSection({ questionId, myChoice, userId, optionA, optionB 
   };
 
   const handleLike = async (commentId: string) => {
-    await likeComment(commentId);
+    const res = gate(await likeComment(commentId));
+    if (!res.ok) return;
     setComments((prev) =>
       prev.map((c) => {
         if (c.id === commentId) return { ...c, likes: c.likes + 1, liked_by_me: true };
@@ -62,7 +65,7 @@ export function CommentSection({ questionId, myChoice, userId, optionA, optionB 
   };
 
   const handleReply = async (parentId: string, content: string) => {
-    const res = await postComment(questionId, content, myChoice, parentId);
+    const res = gate(await postComment(questionId, content, myChoice, parentId));
     const created = res.ok ? res.data : null;
     if (created) {
       setComments((prev) =>

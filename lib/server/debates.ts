@@ -1,6 +1,6 @@
 "use server";
 
-import { ensureAnonUser } from "@/lib/server/auth";
+import { requireAccount } from "@/lib/server/auth";
 import { createServiceSupabase } from "@/lib/server/supabase";
 import { run } from "@/lib/server/run";
 import { ActionError, type ActionResult } from "@/lib/server/result";
@@ -9,7 +9,7 @@ import { parseOrThrow, joinDebateSchema, debateMessageSchema } from "@/lib/serve
 export async function joinDebateQueue(questionId: string, side: "A" | "B"): Promise<ActionResult<{ debateId: string; matched: boolean }>> {
   return run(async () => {
     const input = parseOrThrow(joinDebateSchema, { questionId, side });
-    const user = await ensureAnonUser();
+    const user = await requireAccount();
     const db = createServiceSupabase();
     const { data, error } = await db.rpc("join_debate", {
       p_question_id: input.questionId,
@@ -33,7 +33,7 @@ async function loadParticipantSide(db: ReturnType<typeof createServiceSupabase>,
 export async function sendDebateMessage(debateId: string, content: string): Promise<ActionResult<null>> {
   return run(async () => {
     const input = parseOrThrow(debateMessageSchema, { debateId, content });
-    const user = await ensureAnonUser();
+    const user = await requireAccount();
     const db = createServiceSupabase();
     const side = await loadParticipantSide(db, input.debateId, user.id);
     await db.from("debate_messages").insert({ debate_id: input.debateId, sender_side: side, content: input.content });
@@ -43,7 +43,7 @@ export async function sendDebateMessage(debateId: string, content: string): Prom
 
 export async function endDebate(debateId: string): Promise<ActionResult<null>> {
   return run(async () => {
-    const user = await ensureAnonUser();
+    const user = await requireAccount();
     const db = createServiceSupabase();
     await loadParticipantSide(db, debateId, user.id); // throws if not a participant
     await db.from("debates").update({ status: "ended", ended_at: new Date().toISOString() }).eq("id", debateId);
@@ -53,7 +53,7 @@ export async function endDebate(debateId: string): Promise<ActionResult<null>> {
 
 export async function flagDebateMessage(messageId: string, debateId: string): Promise<ActionResult<{ flagCount: number }>> {
   return run(async () => {
-    const user = await ensureAnonUser();
+    const user = await requireAccount();
     const db = createServiceSupabase();
     await loadParticipantSide(db, debateId, user.id);
     await db.from("debate_messages").update({ flagged: true }).eq("id", messageId);
@@ -69,7 +69,7 @@ export async function flagDebateMessage(messageId: string, debateId: string): Pr
 
 export async function cancelQueue(debateId: string): Promise<ActionResult<null>> {
   return run(async () => {
-    const user = await ensureAnonUser();
+    const user = await requireAccount();
     const db = createServiceSupabase();
     await loadParticipantSide(db, debateId, user.id);
     await db.from("debates").update({ status: "ended", ended_at: new Date().toISOString() }).eq("id", debateId);

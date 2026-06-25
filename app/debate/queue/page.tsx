@@ -5,11 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getQueueCounts } from "@/lib/debates";
 import { joinDebateQueue, cancelQueue } from "@/lib/server/debates";
+import { useAccountGate } from "@/components/auth/useRequireAccount";
 import { QueueWait } from "@/components/debate/QueueWait";
 import type { Choice, Debate } from "@/types";
 
 function QueueContent() {
   const router = useRouter();
+  const gate = useAccountGate();
   const params = useSearchParams();
   const questionId = params.get("question") ?? "";
   const side = (params.get("side") ?? "A") as Choice;
@@ -35,8 +37,9 @@ function QueueContent() {
 
     setJoining(true);
     joinDebateQueue(questionId, side).then((res) => {
-      if (!res.ok) { setJoining(false); router.back(); return; }
-      const { debateId, matched } = res.data;
+      const gated = gate(res);
+      if (!gated.ok) { setJoining(false); if (gated.code !== "account_required") router.back(); return; }
+      const { debateId, matched } = gated.data;
       setDebate({ id: debateId, status: "waiting" } as Debate);
       setJoining(false);
       if (matched) {
