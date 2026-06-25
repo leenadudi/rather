@@ -35,8 +35,7 @@ create table if not exists votes (
   choice char(1) check (choice in ('A','B')),
   user_id uuid references auth.users on delete set null,
   created_at timestamptz default now(),
-  unique(question_id, user_id),
-  unique(question_id, device_id)
+  unique(question_id, user_id)
 );
 
 -- Comments
