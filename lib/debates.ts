@@ -4,32 +4,26 @@ import type { Choice, Debate, DebateMessage } from "@/types";
 export async function joinDebateQueue(
   questionId: string,
   side: Choice,
-  deviceId: string,
-  userId?: string
+  userId: string
 ): Promise<{ debate: Debate; matched: boolean }> {
-  // Check for opposite-side waiting debate
   const opposite: Choice = side === "A" ? "B" : "A";
   const waitingCol = opposite === "A" ? "user_a_id" : "user_b_id";
-  const waitingDevCol = opposite === "A" ? "device_a_id" : "device_b_id";
 
   const { data: waiting } = await supabase
     .from("debates")
     .select("*")
     .eq("question_id", questionId)
     .eq("status", "waiting")
-    .or(`${waitingCol}.not.is.null,${waitingDevCol}.not.is.null`)
+    .not(waitingCol, "is", null)
     .limit(1)
     .single();
 
   if (waiting) {
-    // Match!
     const myCol = side === "A" ? "user_a_id" : "user_b_id";
-    const myDevCol = side === "A" ? "device_a_id" : "device_b_id";
     const { data: matched } = await supabase
       .from("debates")
       .update({
-        [myCol]: userId ?? null,
-        [myDevCol]: userId ? null : deviceId,
+        [myCol]: userId,
         status: "active",
         started_at: new Date().toISOString(),
       })
@@ -39,15 +33,12 @@ export async function joinDebateQueue(
     return { debate: matched as Debate, matched: true };
   }
 
-  // No match — create waiting row
   const myCol = side === "A" ? "user_a_id" : "user_b_id";
-  const myDevCol = side === "A" ? "device_a_id" : "device_b_id";
   const { data: created } = await supabase
     .from("debates")
     .insert({
       question_id: questionId,
-      [myCol]: userId ?? null,
-      [myDevCol]: userId ? null : deviceId,
+      [myCol]: userId,
       status: "waiting",
     })
     .select()

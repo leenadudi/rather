@@ -12,8 +12,12 @@ create table if not exists questions (
     'clarity_vs_kindness','individual_vs_social','present_vs_future'
   )),
   debate_enabled boolean default true,
+  type text not null default 'daily', -- 'daily' | 'community'
+  author_id uuid references auth.users on delete set null,
   created_at timestamptz default now()
 );
+
+create index if not exists questions_type_created_idx on questions (type, created_at desc);
 
 -- Users
 create table if not exists users (
@@ -29,7 +33,7 @@ create table if not exists votes (
   id uuid primary key default gen_random_uuid(),
   question_id uuid references questions on delete cascade,
   choice char(1) check (choice in ('A','B')),
-  user_id uuid references users on delete set null,
+  user_id uuid references auth.users on delete set null,
   device_id text,
   vote_changed boolean default false,
   created_at timestamptz default now(),
@@ -44,7 +48,7 @@ create table if not exists comments (
   parent_id uuid references comments on delete cascade,
   content text not null,
   choice char(1) check (choice in ('A','B')),
-  user_id uuid references users on delete set null,
+  user_id uuid references auth.users on delete set null,
   device_id text,
   likes integer default 0,
   created_at timestamptz default now()
@@ -62,8 +66,8 @@ create table if not exists comment_likes (
 create table if not exists debates (
   id uuid primary key default gen_random_uuid(),
   question_id uuid references questions on delete cascade,
-  user_a_id uuid references users on delete set null,
-  user_b_id uuid references users on delete set null,
+  user_a_id uuid references auth.users on delete set null,
+  user_b_id uuid references auth.users on delete set null,
   device_a_id text,
   device_b_id text,
   status text default 'waiting' check (status in ('waiting','active','ended','flagged')),
