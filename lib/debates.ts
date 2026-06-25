@@ -79,14 +79,14 @@ export async function endDebate(debateId: string, status: "ended" | "flagged" = 
 export async function getQueueCounts(questionId: string): Promise<{ a: number; b: number }> {
   const { data } = await supabase
     .from("debates")
-    .select("user_a_id, user_b_id, device_a_id, device_b_id")
+    .select("user_a_id, user_b_id")
     .eq("question_id", questionId)
     .eq("status", "waiting");
 
   let a = 0, b = 0;
   for (const row of data ?? []) {
-    if (row.user_a_id || row.device_a_id) a++;
-    if (row.user_b_id || row.device_b_id) b++;
+    if (row.user_a_id) a++;
+    if (row.user_b_id) b++;
   }
   return { a, b };
 }

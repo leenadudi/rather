@@ -34,8 +34,6 @@ create table if not exists votes (
   question_id uuid references questions on delete cascade,
   choice char(1) check (choice in ('A','B')),
   user_id uuid references auth.users on delete set null,
-  device_id text,
-  vote_changed boolean default false,
   created_at timestamptz default now(),
   unique(question_id, user_id),
   unique(question_id, device_id)
@@ -49,7 +47,6 @@ create table if not exists comments (
   content text not null,
   choice char(1) check (choice in ('A','B')),
   user_id uuid references auth.users on delete set null,
-  device_id text,
   likes integer default 0,
   created_at timestamptz default now()
 );
@@ -58,7 +55,6 @@ create table if not exists comments (
 create table if not exists comment_likes (
   comment_id uuid references comments on delete cascade,
   user_id uuid,
-  device_id text,
   created_at timestamptz default now()
 );
 
@@ -68,8 +64,6 @@ create table if not exists debates (
   question_id uuid references questions on delete cascade,
   user_a_id uuid references auth.users on delete set null,
   user_b_id uuid references auth.users on delete set null,
-  device_a_id text,
-  device_b_id text,
   status text default 'waiting' check (status in ('waiting','active','ended','flagged')),
   started_at timestamptz,
   ended_at timestamptz,
