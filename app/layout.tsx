@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { AnonAuthInit } from "@/components/AnonAuthInit";
 
 export const metadata: Metadata = {
   title: "would you rather",
@@ -17,6 +18,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased bg-background min-h-screen">
+        <AnonAuthInit />
         <Navbar />
         <div className="pb-20 md:pb-0">
           {children}

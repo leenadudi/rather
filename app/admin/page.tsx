@@ -25,10 +25,6 @@ function tomorrowMidnightUTC() {
 }
 
 export default function AdminPage() {
-  const [authed, setAuthed] = useState(false);
-  const [pw, setPw] = useState("");
-  const [pwError, setPwError] = useState(false);
-
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(false);
   const [optionA, setOptionA] = useState("");
@@ -42,17 +38,10 @@ export default function AdminPage() {
   const [liveCounts, setLiveCounts] = useState<{ a: number; b: number; total: number } | null>(null);
   const [dbError, setDbError] = useState(false);
 
-  const handleAuth = () => {
-    if (pw === "admin123" || pw === process.env.NEXT_PUBLIC_ADMIN_PASSWORD) {
-      setAuthed(true);
-    } else {
-      setPwError(true);
-    }
-  };
-
+  // Access is gated by middleware.ts (HTTP Basic Auth) before this renders.
   useEffect(() => {
-    if (authed) loadQuestions();
-  }, [authed]);
+    loadQuestions();
+  }, []);
 
   const loadQuestions = async () => {
     setLoading(true);
@@ -124,35 +113,6 @@ export default function AdminPage() {
     await supabase.from("questions").delete().eq("id", id);
     loadQuestions();
   };
-
-  // ── Login screen ──────────────────────────────────────────
-  if (!authed) {
-    return (
-      <main className="min-h-screen bg-background flex items-center justify-center px-4">
-        <div className="w-full max-w-xs">
-          <p className="text-xs font-semibold text-text-secondary uppercase tracking-widest mb-6">
-            admin
-          </p>
-          <input
-            type="password"
-            value={pw}
-            onChange={(e) => { setPw(e.target.value); setPwError(false); }}
-            onKeyDown={(e) => e.key === "Enter" && handleAuth()}
-            placeholder="password"
-            autoFocus
-            className="w-full text-sm px-4 py-3 rounded-xl border border-border bg-card text-text-primary placeholder:text-text-muted focus:outline-none focus:border-text-secondary mb-3 transition-colors"
-          />
-          {pwError && <p className="text-xs text-error mb-3">wrong password</p>}
-          <button
-            onClick={handleAuth}
-            className="w-full py-3 bg-dark text-white font-semibold rounded-xl hover:bg-text-secondary transition-colors"
-          >
-            enter →
-          </button>
-        </div>
-      </main>
-    );
-  }
 
   // ── DB not set up yet ─────────────────────────────────────
   if (dbError) {

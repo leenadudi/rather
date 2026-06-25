@@ -4,22 +4,14 @@ import type { Choice, Vote, VoteCounts } from "@/types";
 export async function castVote(
   questionId: string,
   choice: Choice,
-  deviceId: string,
-  userId?: string
+  userId: string
 ): Promise<{ vote: Vote | null; error: string | null }> {
-  const payload: Record<string, unknown> = {
-    question_id: questionId,
-    choice,
-    device_id: userId ? null : deviceId,
-    user_id: userId ?? null,
-  };
-
   const { data, error } = await supabase
     .from("votes")
-    .upsert(payload, {
-      onConflict: userId ? "question_id,user_id" : "question_id,device_id",
-      ignoreDuplicates: true,
-    })
+    .upsert(
+      { question_id: questionId, choice, user_id: userId },
+      { onConflict: "question_id,user_id", ignoreDuplicates: true }
+    )
     .select()
     .single();
 
@@ -31,22 +23,15 @@ export async function castVote(
 
 export async function getMyVote(
   questionId: string,
-  deviceId: string,
-  userId?: string
+  userId: string
 ): Promise<Choice | null> {
-  let query = supabase
+  const { data } = await supabase
     .from("votes")
     .select("choice")
     .eq("question_id", questionId)
-    .limit(1);
-
-  if (userId) {
-    query = query.eq("user_id", userId);
-  } else {
-    query = query.eq("device_id", deviceId);
-  }
-
-  const { data } = await query.single();
+    .eq("user_id", userId)
+    .limit(1)
+    .single();
   return (data?.choice as Choice) ?? null;
 }
 

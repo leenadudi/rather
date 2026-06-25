@@ -14,9 +14,15 @@ interface FriendVote {
 interface Props {
   questionId: string;
   myChoice: Choice | null;
+  optionA?: string;
+  optionB?: string;
 }
 
-export function GroupSidebar({ questionId, myChoice }: Props) {
+function short(text: string, max = 14) {
+  return text.length <= max ? text : text.slice(0, max).trimEnd() + "…";
+}
+
+export function GroupSidebar({ questionId, myChoice, optionA, optionB }: Props) {
   const [userId, setUserId] = useState<string | null>(null);
   const [myUsername, setMyUsername] = useState<string | null>(null);
   const [friendVotes, setFriendVotes] = useState<FriendVote[]>([]);
@@ -151,7 +157,7 @@ export function GroupSidebar({ questionId, myChoice }: Props) {
                 <span
                   className={`text-xs ${countA > 0 ? "text-side-a" : "text-text-muted"}`}
                 >
-                  chose A
+                  {optionA ? short(optionA) : "option a"}
                 </span>
               </div>
               <div
@@ -167,7 +173,7 @@ export function GroupSidebar({ questionId, myChoice }: Props) {
                 <span
                   className={`text-xs ${countB > 0 ? "text-side-b" : "text-text-muted"}`}
                 >
-                  chose B
+                  {optionB ? short(optionB) : "option b"}
                 </span>
               </div>
             </div>
@@ -183,13 +189,16 @@ export function GroupSidebar({ questionId, myChoice }: Props) {
                   </div>
                   {f.choice ? (
                     <span
-                      className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                      className={`text-xs font-semibold px-2 py-0.5 rounded-full max-w-[80px] truncate ${
                         f.choice === "A"
                           ? "bg-side-a-bg text-side-a"
                           : "bg-side-b-bg text-side-b"
                       }`}
+                      title={f.choice === "A" ? optionA : optionB}
                     >
-                      chose {f.choice.toLowerCase()}
+                      {f.choice === "A"
+                        ? (optionA ? short(optionA, 12) : "option a")
+                        : (optionB ? short(optionB, 12) : "option b")}
                     </span>
                   ) : (
                     <span className="text-xs text-text-muted">hasn&apos;t voted</span>
@@ -207,13 +216,16 @@ export function GroupSidebar({ questionId, myChoice }: Props) {
                 </div>
                 {myChoice ? (
                   <span
-                    className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                    className={`text-xs font-semibold px-2 py-0.5 rounded-full max-w-[80px] truncate ${
                       myChoice === "A"
                         ? "bg-side-a-bg text-side-a"
                         : "bg-side-b-bg text-side-b"
                     }`}
+                    title={myChoice === "A" ? optionA : optionB}
                   >
-                    chose {myChoice.toLowerCase()}
+                    {myChoice === "A"
+                      ? (optionA ? short(optionA, 12) : "option a")
+                      : (optionB ? short(optionB, 12) : "option b")}
                   </span>
                 ) : (
                   <span className="text-xs text-text-muted">hasn&apos;t voted</span>
@@ -243,23 +255,25 @@ export function GroupSidebar({ questionId, myChoice }: Props) {
                 <div className="flex gap-1.5">
                   <button
                     onClick={() => handlePredict(f.userId, "A")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                    title={optionA}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors max-w-[70px] truncate ${
                       predictions[f.userId] === "A"
                         ? "bg-side-a text-white"
                         : "bg-side-a-bg text-side-a hover:bg-side-a/20"
                     }`}
                   >
-                    A
+                    {optionA ? short(optionA, 10) : "A"}
                   </button>
                   <button
                     onClick={() => handlePredict(f.userId, "B")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                    title={optionB}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors max-w-[70px] truncate ${
                       predictions[f.userId] === "B"
                         ? "bg-side-b text-white"
                         : "bg-side-b-bg text-side-b hover:bg-side-b/20"
                     }`}
                   >
-                    B
+                    {optionB ? short(optionB, 10) : "B"}
                   </button>
                 </div>
               </div>

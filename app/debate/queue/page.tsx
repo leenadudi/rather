@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { joinDebateQueue, getQueueCounts } from "@/lib/debates";
-import { getDeviceId } from "@/lib/fingerprint";
+import { ensureSession } from "@/lib/anon";
 import { QueueWait } from "@/components/debate/QueueWait";
 import type { Choice, Debate } from "@/types";
 
@@ -17,14 +17,24 @@ function QueueContent() {
   const [debate, setDebate] = useState<Debate | null>(null);
   const [queueCounts, setQueueCounts] = useState({ a: 0, b: 0 });
   const [joining, setJoining] = useState(false);
+  const [optionA, setOptionA] = useState<string | undefined>();
+  const [optionB, setOptionB] = useState<string | undefined>();
 
   useEffect(() => {
     if (!questionId) return;
     getQueueCounts(questionId).then(setQueueCounts);
 
+    supabase
+      .from("questions")
+      .select("option_a, option_b")
+      .eq("id", questionId)
+      .single()
+      .then(({ data }) => {
+        if (data) { setOptionA(data.option_a); setOptionB(data.option_b); }
+      });
+
     setJoining(true);
-    const deviceId = getDeviceId();
-    joinDebateQueue(questionId, side, deviceId).then(({ debate: d, matched }) => {
+    ensureSession().then((userId) => joinDebateQueue(questionId, side, userId)).then(({ debate: d, matched }) => {
       setDebate(d);
       setJoining(false);
       if (matched) {
@@ -73,6 +83,8 @@ function QueueContent() {
         questionId={questionId}
         queueCounts={queueCounts}
         onCancel={handleCancel}
+        optionA={optionA}
+        optionB={optionB}
       />
     </main>
   );

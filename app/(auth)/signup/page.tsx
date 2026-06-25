@@ -7,6 +7,29 @@ import { supabase } from "@/lib/supabase";
 import { generateRecoveryCode, hashRecoveryCode } from "@/lib/recovery";
 import { RecoveryCodeScreen } from "@/components/account/RecoveryCodeScreen";
 
+async function googleSignUp() {
+  // Save anon session ID so the callback can migrate votes to the OAuth account.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.user?.is_anonymous) {
+    sessionStorage.setItem("wyr_anon_migrate", session.user.id);
+  }
+  await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: `${window.location.origin}/auth/callback` },
+  });
+}
+
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908C16.658 14.226 17.64 11.92 17.64 9.2z" fill="#4285F4"/>
+      <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
+      <path d="M3.964 10.706A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.038l3.007-2.332z" fill="#FBBC05"/>
+      <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.962L3.964 7.294C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+    </svg>
+  );
+}
+
 const SUGGESTIONS = [
   "ghost_42", "anon_user", "mystery91", "quiet_fog", "dusk_wave",
   "still_echo", "pale_drift", "hollow_pine", "open_sky", "calm_brush",
@@ -78,6 +101,10 @@ export default function SignupPage() {
       return;
     }
 
+    // Save anon user ID so we can migrate their votes after account creation.
+    const { data: { session: anonSession } } = await supabase.auth.getSession();
+    const anonId = anonSession?.user?.is_anonymous ? anonSession.user.id : null;
+
     const fakeEmail = `${username.trim().toLowerCase()}@wyr.internal`;
     const { data, error: authErr } = await supabase.auth.signUp({ email: fakeEmail, password });
 
@@ -87,16 +114,25 @@ export default function SignupPage() {
       return;
     }
 
+    const newUserId = data.user.id;
     const code = generateRecoveryCode();
     const hashed = await hashRecoveryCode(code);
 
     await supabase.from("users").insert({
-      id: data.user.id,
+      id: newUserId,
       username: username.trim().toLowerCase(),
       recovery_code: hashed,
     });
 
-    setUserId(data.user.id);
+    // Migrate any votes/comments from the previous anonymous session.
+    if (anonId && anonId !== newUserId) {
+      await Promise.all([
+        supabase.from("votes").update({ user_id: newUserId }).eq("user_id", anonId),
+        supabase.from("comments").update({ user_id: newUserId }).eq("user_id", anonId),
+      ]);
+    }
+
+    setUserId(newUserId);
     setRecoveryCode(code);
     setLoading(false);
   };
@@ -117,20 +153,6 @@ export default function SignupPage() {
       {/* Left: features */}
       <div className="hidden lg:flex flex-col justify-center flex-1 px-12 border-r border-border-light">
         <div className="max-w-sm">
-          {/* Mini result preview */}
-          <div className="bg-card border border-border-light rounded-2xl overflow-hidden mb-8">
-            <div className="flex">
-              <div className="flex-1 p-4 bg-side-a-bg">
-                <p className="text-xs font-semibold text-side-a-dark mb-1">always say exactly what you&apos;re thinking</p>
-                <p className="text-lg font-bold text-side-a">54%</p>
-              </div>
-              <div className="flex-1 p-4">
-                <p className="text-xs font-medium text-text-secondary mb-1">never be able to say what you mean</p>
-                <p className="text-lg font-bold text-side-b">46%</p>
-              </div>
-            </div>
-          </div>
-
           <h2 className="text-lg font-bold text-text-primary mb-4">create an account to unlock</h2>
 
           <div className="grid grid-cols-2 gap-2.5 mb-6">
@@ -153,7 +175,23 @@ export default function SignupPage() {
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm">
           <h1 className="text-2xl font-bold text-text-primary mb-1">create your account</h1>
-          <p className="text-sm text-text-secondary mb-7">no email. no real name. totally anonymous.</p>
+          <p className="text-sm text-text-secondary mb-6">no email. no real name. totally anonymous.</p>
+
+          {/* OAuth button */}
+          <button
+            type="button"
+            onClick={googleSignUp}
+            className="w-full flex items-center justify-center gap-3 py-3 bg-card border border-border rounded-xl text-sm font-medium text-text-primary hover:border-text-secondary transition-colors mb-6"
+          >
+            <GoogleIcon />
+            continue with google
+          </button>
+
+          <div className="flex items-center gap-3 mb-6">
+            <div className="flex-1 h-px bg-border-light" />
+            <span className="text-xs text-text-muted">or use a username</span>
+            <div className="flex-1 h-px bg-border-light" />
+          </div>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div>

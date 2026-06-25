@@ -113,6 +113,22 @@ export default function YouPage() {
 
   return (
     <main className="min-h-screen bg-background max-w-2xl mx-auto px-4 py-12">
+      {/* Quick links */}
+      <div className="flex items-center gap-2 mb-6">
+        <Link
+          href="/history"
+          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-card border border-border-light rounded-full text-xs font-semibold text-text-secondary hover:border-border transition-colors"
+        >
+          ◷ history
+        </Link>
+        <Link
+          href="/friends"
+          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-card border border-border-light rounded-full text-xs font-semibold text-text-secondary hover:border-border transition-colors"
+        >
+          ◑ friends
+        </Link>
+      </div>
+
       {/* Current month card */}
       {currentCard ? (
         <CharacterCard card={currentCard} />

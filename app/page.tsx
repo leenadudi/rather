@@ -5,7 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { getTodayQuestion, getRecentQuestions } from "@/lib/questions";
 import { castVote, getMyVote, getVoteCounts } from "@/lib/votes";
-import { getDeviceId } from "@/lib/fingerprint";
+import { ensureSession } from "@/lib/anon";
 import { getQueueCounts } from "@/lib/debates";
 import { getCommentCount } from "@/lib/comments";
 import { DebateCTA } from "@/components/vote/DebateCTA";
@@ -60,14 +60,13 @@ export default function HomePage() {
       if (!q) { setLoading(false); return; }
       setQuestion(q);
 
-      const deviceId = getDeviceId();
-      const [existing, voteCounts, queue, cc, recent, authData] = await Promise.all([
-        getMyVote(q.id, deviceId),
+      const uid = await ensureSession();
+      const [existing, voteCounts, queue, cc, recent] = await Promise.all([
+        getMyVote(q.id, uid),
         getVoteCounts(q.id),
         getQueueCounts(q.id),
         getCommentCount(q.id),
         getRecentQuestions(6),
-        supabase.auth.getUser(),
       ]);
 
       setMyChoice(existing);
@@ -75,7 +74,6 @@ export default function HomePage() {
       setQueueCounts(queue);
       setCommentCount(cc);
 
-      const uid = authData.data.user?.id ?? null;
       setUserId(uid);
 
       // Recent questions (skip today)
@@ -85,19 +83,22 @@ export default function HomePage() {
       // Get votes for recent questions
       if (pastQ.length > 0) {
         const qIds = pastQ.map((r) => r.id);
-        const votesQuery = uid
-          ? supabase.from("votes").select("question_id, choice").eq("user_id", uid).in("question_id", qIds)
-          : supabase.from("votes").select("question_id, choice").eq("device_id", deviceId).in("question_id", qIds);
-        const { data: rv } = await votesQuery;
+        const { data: rv } = await supabase
+          .from("votes")
+          .select("question_id, choice")
+          .eq("user_id", uid)
+          .in("question_id", qIds);
         const vm: Record<string, Choice> = {};
         for (const v of rv ?? []) vm[v.question_id] = v.choice as Choice;
         setRecentVotes(vm);
       }
 
-      // Streak calculation
-      const streakQuery = uid
-        ? supabase.from("votes").select("created_at").eq("user_id", uid).order("created_at", { ascending: false }).limit(60)
-        : supabase.from("votes").select("created_at").eq("device_id", deviceId).order("created_at", { ascending: false }).limit(60);
+      const streakQuery = supabase
+        .from("votes")
+        .select("created_at")
+        .eq("user_id", uid)
+        .order("created_at", { ascending: false })
+        .limit(60);
       const { data: svotes } = await streakQuery;
       if (svotes?.length) {
         const days = new Set(svotes.map((v) => new Date(v.created_at).toDateString()));
@@ -135,13 +136,12 @@ export default function HomePage() {
   }, [question]);
 
   const handleVote = useCallback(async (choice: Choice) => {
-    if (!question || myChoice) return;
+    if (!question || myChoice || !userId) return;
     setMyChoice(choice);
     setSaving(choice);
     setSaveError(false);
     setPendingChoice(choice);
-    const deviceId = getDeviceId();
-    const { error } = await castVote(question.id, choice, deviceId);
+    const { error } = await castVote(question.id, choice, userId);
     if (error) {
       setSaveError(true);
       setSaving(null);
@@ -151,14 +151,13 @@ export default function HomePage() {
       const fresh = await getVoteCounts(question.id);
       setCounts(fresh);
     }
-  }, [question, myChoice]);
+  }, [question, myChoice, userId]);
 
   const handleRetry = useCallback(async () => {
-    if (!question || !pendingChoice) return;
+    if (!question || !pendingChoice || !userId) return;
     setSaveError(false);
     setSaving(pendingChoice);
-    const deviceId = getDeviceId();
-    const { error } = await castVote(question.id, pendingChoice, deviceId);
+    const { error } = await castVote(question.id, pendingChoice, userId);
     if (error) { setSaveError(true); setSaving(null); }
     else {
       setSaving(null);
@@ -166,7 +165,7 @@ export default function HomePage() {
       const fresh = await getVoteCounts(question.id);
       setCounts(fresh);
     }
-  }, [question, pendingChoice]);
+  }, [question, pendingChoice, userId]);
 
   if (loading) {
     return (
@@ -294,13 +293,16 @@ export default function HomePage() {
                       </p>
                       {recentVotes[q.id] && (
                         <span
-                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${
+                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 max-w-[64px] truncate ${
                             recentVotes[q.id] === "A"
                               ? "bg-side-a-bg text-side-a"
                               : "bg-side-b-bg text-side-b"
                           }`}
+                          title={recentVotes[q.id] === "A" ? q.option_a : q.option_b}
                         >
-                          voted {recentVotes[q.id]!.toLowerCase()}
+                          {recentVotes[q.id] === "A"
+                            ? (q.option_a.length <= 10 ? q.option_a : q.option_a.slice(0, 10).trimEnd() + "…")
+                            : (q.option_b.length <= 10 ? q.option_b : q.option_b.slice(0, 10).trimEnd() + "…")}
                         </span>
                       )}
                     </div>
@@ -383,44 +385,15 @@ export default function HomePage() {
               />
             )}
 
-            {/* Sign-up nudge for anon users after voting */}
-            {myChoice && !userId && (
-              <div className="bg-card border border-border-light rounded-2xl p-5">
-                <p className="text-sm font-semibold text-text-primary mb-1">create an account to unlock</p>
-                <div className="grid grid-cols-2 gap-2 my-3">
-                  {[
-                    ["vote history", "every question, saved forever"],
-                    ["character cards", "monthly summaries of your choices"],
-                    ["friend groups", "see how your friends vote"],
-                    ["shareable cards", "share results with friends"],
-                  ].map(([title, desc]) => (
-                    <div key={title} className="bg-background rounded-xl p-3">
-                      <p className="text-xs font-semibold text-text-primary">{title}</p>
-                      <p className="text-[11px] text-text-muted leading-snug mt-0.5">{desc}</p>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-text-muted mb-3">
-                  🔒 no email required. no tracking. just a username + password.
-                </p>
-                <Link
-                  href="/signup"
-                  className="block w-full py-2.5 bg-dark text-white text-sm font-semibold rounded-xl text-center hover:bg-text-secondary transition-colors"
-                >
-                  create free account
-                </Link>
-                <p className="text-xs text-text-muted text-center mt-2">
-                  already have one?{" "}
-                  <Link href="/signin" className="text-side-a hover:underline">
-                    sign in
-                  </Link>
-                </p>
-              </div>
-            )}
-
             {/* Comments */}
-            {myChoice && (
-              <CommentSection questionId={question.id} myChoice={myChoice} />
+            {myChoice && userId && (
+              <CommentSection
+                questionId={question.id}
+                myChoice={myChoice}
+                userId={userId}
+                optionA={question.option_a}
+                optionB={question.option_b}
+              />
             )}
 
             {!myChoice && commentCount > 0 && (
@@ -432,7 +405,12 @@ export default function HomePage() {
 
           {/* ── Right sidebar ─────────────────────────────────── */}
           <aside className="hidden lg:block space-y-4">
-            <GroupSidebar questionId={question.id} myChoice={myChoice} />
+            <GroupSidebar
+              questionId={question.id}
+              myChoice={myChoice}
+              optionA={question.option_a}
+              optionB={question.option_b}
+            />
           </aside>
         </div>
       </div>

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Choice, Comment } from "@/types";
 import { getComments, getReplies, postComment, likeComment, type CommentSort, type CommentFilter } from "@/lib/comments";
-import { getDeviceId } from "@/lib/fingerprint";
 import { SortTabs } from "./SortTabs";
 import { FilterChips } from "./FilterChips";
 import { CommentItem } from "./CommentItem";
@@ -12,10 +11,12 @@ import { CommentInput } from "./CommentInput";
 interface Props {
   questionId: string;
   myChoice: Choice;
-  userId?: string;
+  userId: string;
+  optionA?: string;
+  optionB?: string;
 }
 
-export function CommentSection({ questionId, myChoice, userId }: Props) {
+export function CommentSection({ questionId, myChoice, userId, optionA, optionB }: Props) {
   const [sort, setSort] = useState<CommentSort>("top");
   const [filter, setFilter] = useState<CommentFilter>("all");
   const [comments, setComments] = useState<Comment[]>([]);
@@ -24,7 +25,6 @@ export function CommentSection({ questionId, myChoice, userId }: Props) {
   const load = useCallback(async () => {
     setLoading(true);
     const data = await getComments(questionId, sort, filter);
-    // Attach replies
     const withReplies = await Promise.all(
       data.map(async (c) => {
         const replies = await getReplies(c.id);
@@ -38,16 +38,14 @@ export function CommentSection({ questionId, myChoice, userId }: Props) {
   useEffect(() => { load(); }, [load]);
 
   const handlePost = async (content: string) => {
-    const deviceId = getDeviceId();
-    const created = await postComment(questionId, content, myChoice, deviceId, userId);
+    const created = await postComment(questionId, content, myChoice, userId);
     if (created) {
       setComments((prev) => [{ ...created, likes: 0, replies: [] }, ...prev]);
     }
   };
 
   const handleLike = async (commentId: string) => {
-    const deviceId = getDeviceId();
-    await likeComment(commentId, deviceId, userId);
+    await likeComment(commentId, userId);
     setComments((prev) =>
       prev.map((c) => {
         if (c.id === commentId) return { ...c, likes: c.likes + 1, liked_by_me: true };
@@ -62,8 +60,7 @@ export function CommentSection({ questionId, myChoice, userId }: Props) {
   };
 
   const handleReply = async (parentId: string, content: string) => {
-    const deviceId = getDeviceId();
-    const created = await postComment(questionId, content, myChoice, deviceId, userId, parentId);
+    const created = await postComment(questionId, content, myChoice, userId, parentId);
     if (created) {
       setComments((prev) =>
         prev.map((c) =>
@@ -85,7 +82,7 @@ export function CommentSection({ questionId, myChoice, userId }: Props) {
       </div>
 
       <div className="mb-4">
-        <FilterChips value={filter} onChange={setFilter} />
+        <FilterChips value={filter} onChange={setFilter} optionA={optionA} optionB={optionB} />
       </div>
 
       <div className="mb-4">

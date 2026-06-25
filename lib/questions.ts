@@ -5,6 +5,7 @@ export async function getTodayQuestion(): Promise<Question | null> {
   const { data } = await supabase
     .from("questions")
     .select("*")
+    .eq("type", "daily")
     .lte("published_at", new Date().toISOString())
     .order("published_at", { ascending: false })
     .limit(1)
@@ -16,6 +17,7 @@ export async function getRecentQuestions(limit = 7): Promise<Question[]> {
   const { data } = await supabase
     .from("questions")
     .select("*")
+    .eq("type", "daily")
     .lte("published_at", new Date().toISOString())
     .order("published_at", { ascending: false })
     .limit(limit);

@@ -11,29 +11,22 @@ export function Navbar() {
   const [initials, setInitials] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      setUserId(data.user?.id ?? null);
-      if (data.user) {
-        const { data: u } = await supabase
-          .from("users")
-          .select("username")
-          .eq("id", data.user.id)
-          .single();
-        if (u?.username) setInitials(u.username.slice(0, 2).toUpperCase());
-      }
-    });
+    async function loadUser() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || user.is_anonymous) { setUserId(null); return; }
+      setUserId(user.id);
+      const { data: u } = await supabase.from("users").select("username").eq("id", user.id).single();
+      if (u?.username) setInitials(u.username.slice(0, 2).toUpperCase());
+    }
+    loadUser();
+
     const { data: sub } = supabase.auth.onAuthStateChange(async (_e, session) => {
-      setUserId(session?.user.id ?? null);
-      if (session?.user) {
-        const { data: u } = await supabase
-          .from("users")
-          .select("username")
-          .eq("id", session.user.id)
-          .single();
-        if (u?.username) setInitials(u.username.slice(0, 2).toUpperCase());
-      } else {
-        setInitials(null);
-      }
+      const user = session?.user;
+      if (!user || user.is_anonymous) { setUserId(null); setInitials(null); return; }
+      setUserId(user.id);
+      const { data: u } = await supabase.from("users").select("username").eq("id", user.id).single();
+      if (u?.username) setInitials(u.username.slice(0, 2).toUpperCase());
+      else setInitials(null);
     });
     return () => sub.subscription.unsubscribe();
   }, []);
@@ -54,13 +47,21 @@ export function Navbar() {
 
         {/* Center: nav links */}
         <div className="flex items-center gap-7">
-          <NavLink href="/" label="today" active={pathname === "/"} />
-          <NavLink href="/history" label="history" active={pathname.startsWith("/history")} />
+          <NavLink href="/" label="daily" active={pathname === "/"} />
+          <NavLink href="/explore" label="explore" active={pathname.startsWith("/explore")} />
           <NavLink href="/you" label="you" active={pathname.startsWith("/you")} />
         </div>
 
         {/* Right: user state */}
         <div className="flex items-center gap-2">
+          {pathname.startsWith("/explore") && (
+            <button
+              onClick={() => window.dispatchEvent(new Event("wyr:submit"))}
+              className="hidden sm:block px-4 py-1.5 bg-dark text-white text-xs font-semibold rounded-full hover:bg-text-secondary transition-colors"
+            >
+              + submit a wyr
+            </button>
+          )}
           {userId ? (
             <button
               onClick={() => supabase.auth.signOut()}

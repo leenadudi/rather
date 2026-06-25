@@ -45,8 +45,7 @@ export async function postComment(
   questionId: string,
   content: string,
   choice: Choice,
-  deviceId: string,
-  userId?: string,
+  userId: string,
   parentId?: string
 ): Promise<Comment | null> {
   const { data, error } = await supabase
@@ -55,8 +54,7 @@ export async function postComment(
       question_id: questionId,
       content,
       choice,
-      device_id: userId ? null : deviceId,
-      user_id: userId ?? null,
+      user_id: userId,
       parent_id: parentId ?? null,
     })
     .select()
@@ -65,19 +63,8 @@ export async function postComment(
   return data as Comment;
 }
 
-export async function likeComment(
-  commentId: string,
-  deviceId: string,
-  userId?: string
-): Promise<void> {
-  // idempotent — ignore duplicate errors
-  await supabase.from("comment_likes").insert({
-    comment_id: commentId,
-    user_id: userId ?? null,
-    device_id: userId ? null : deviceId,
-  });
-
-  // increment likes
+export async function likeComment(commentId: string, userId: string): Promise<void> {
+  await supabase.from("comment_likes").insert({ comment_id: commentId, user_id: userId });
   await supabase.rpc("increment_comment_likes", { cid: commentId });
 }
 

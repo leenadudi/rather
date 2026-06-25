@@ -99,9 +99,10 @@ export default function HistoryPage() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) { setLoading(false); return; }
-      setUserId(data.user.id);
-      loadHistory(data.user.id);
+      const user = data.user;
+      if (!user || user.is_anonymous) { setLoading(false); return; }
+      setUserId(user.id);
+      loadHistory(user.id);
     });
   }, []);
 

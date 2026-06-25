@@ -5,17 +5,23 @@ import type { CommentFilter } from "@/lib/comments";
 interface Props {
   value: CommentFilter;
   onChange: (v: CommentFilter) => void;
+  optionA?: string;
+  optionB?: string;
 }
 
-const chips: { value: CommentFilter; label: string }[] = [
-  { value: "all", label: "all" },
-  { value: "A", label: "team a" },
-  { value: "B", label: "team b" },
-];
+function short(text: string, max = 18) {
+  return text.length <= max ? text : text.slice(0, max).trimEnd() + "…";
+}
 
-export function FilterChips({ value, onChange }: Props) {
+export function FilterChips({ value, onChange, optionA, optionB }: Props) {
+  const chips: { value: CommentFilter; label: string }[] = [
+    { value: "all", label: "all" },
+    { value: "A", label: optionA ? short(optionA) : "option a" },
+    { value: "B", label: optionB ? short(optionB) : "option b" },
+  ];
+
   return (
-    <div className="flex gap-2">
+    <div className="flex gap-2 flex-wrap">
       {chips.map((c) => (
         <button
           key={c.value}

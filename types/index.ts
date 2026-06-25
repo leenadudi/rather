@@ -8,6 +8,8 @@ export type QuestionDimension =
   | "individual_vs_social"
   | "present_vs_future";
 
+export type QuestionType = "daily" | "community";
+
 export interface Question {
   id: string;
   option_a: string;
@@ -16,7 +18,25 @@ export interface Question {
   created_at: string;
   dimension?: QuestionDimension;
   debate_enabled?: boolean;
+  type?: QuestionType;
+  author_id?: string | null;
 }
+
+// A community question enriched with aggregate counts for the explore feed.
+export interface CommunityQuestion extends Question {
+  counts: VoteCounts;
+  comment_count: number;
+  my_choice: Choice | null;
+  author_username: string | null;
+}
+
+export interface CommunityStats {
+  submitted: number;
+  live: number;
+  total_votes: number;
+}
+
+export type CommunitySort = "trending" | "new" | "top";
 
 export interface Vote {
   id: string;
