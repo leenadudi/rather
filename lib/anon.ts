@@ -1,12 +1,10 @@
-import { supabase } from "./supabase";
+import { startSession } from "@/lib/server/session";
 
-// Returns a Supabase user ID — creates an anonymous session if none exists.
-// Anonymous sessions persist in localStorage, so the user keeps their data
-// across page loads on the same device until they create a permanent account.
+// Returns the current anon/real user id, asking the SERVER to establish the
+// session (so the browser never mints a competing anonymous identity). The
+// cookie the server sets is shared with the cookie-based browser client.
 export async function ensureSession(): Promise<string> {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session?.user) return session.user.id;
-  const { data, error } = await supabase.auth.signInAnonymously();
-  if (error || !data.user) throw new Error("auth failed: " + error?.message);
-  return data.user.id;
+  const res = await startSession();
+  if (!res.ok) throw new Error("auth failed: " + res.error);
+  return res.data.userId;
 }
