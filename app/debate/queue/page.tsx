@@ -37,7 +37,7 @@ function QueueContent() {
     joinDebateQueue(questionId, side).then((res) => {
       if (!res.ok) { setJoining(false); router.back(); return; }
       const { debateId, matched } = res.data;
-      setDebate({ id: debateId } as Debate);
+      setDebate({ id: debateId, status: "waiting" } as Debate);
       setJoining(false);
       if (matched) {
         router.replace(`/debate/${debateId}?side=${side}`);
