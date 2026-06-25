@@ -11,26 +11,14 @@ export async function joinDebateQueue(questionId: string, side: "A" | "B"): Prom
     const input = parseOrThrow(joinDebateSchema, { questionId, side });
     const user = await ensureAnonUser();
     const db = createServiceSupabase();
-    const opposite = input.side === "A" ? "B" : "A";
-    const waitingCol = opposite === "A" ? "user_a_id" : "user_b_id";
-    const myCol = input.side === "A" ? "user_a_id" : "user_b_id";
-
-    const { data: waiting } = await db
-      .from("debates").select("*")
-      .eq("question_id", input.questionId).eq("status", "waiting")
-      .not(waitingCol, "is", null).limit(1).single();
-
-    if (waiting) {
-      const { data: matched } = await db
-        .from("debates")
-        .update({ [myCol]: user.id, status: "active", started_at: new Date().toISOString() })
-        .eq("id", (waiting as { id: string }).id).select().single();
-      return { debateId: (matched as { id: string }).id, matched: true };
-    }
-    const { data: created } = await db
-      .from("debates").insert({ question_id: input.questionId, [myCol]: user.id, status: "waiting" })
-      .select().single();
-    return { debateId: (created as { id: string }).id, matched: false };
+    const { data, error } = await db.rpc("join_debate", {
+      p_question_id: input.questionId,
+      p_side: input.side,
+      p_user_id: user.id,
+    });
+    if (error) throw error;
+    const row = (Array.isArray(data) ? data[0] : data) as { debate_id: string; matched: boolean };
+    return { debateId: row.debate_id, matched: row.matched };
   });
 }
 

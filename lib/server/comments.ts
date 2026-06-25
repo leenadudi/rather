@@ -38,8 +38,8 @@ export async function likeComment(commentId: string): Promise<ActionResult<null>
     const input = parseOrThrow(likeSchema, { commentId });
     const user = await ensureAnonUser();
     const db = createServiceSupabase();
-    await db.from("comment_likes").insert({ comment_id: input.commentId, user_id: user.id });
-    await db.rpc("increment_comment_likes", { cid: input.commentId });
+    const { error } = await db.rpc("like_comment", { p_comment_id: input.commentId, p_user_id: user.id });
+    if (error) throw error;
     return null;
   });
 }

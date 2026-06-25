@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const ensureAnonUser = vi.hoisted(() => vi.fn());
+const rpc = vi.hoisted(() => vi.fn());
 const state: { debateRow: Record<string, unknown> | null; inserted: Record<string, unknown> | null } = { debateRow: null, inserted: null };
 
 vi.mock("@/lib/server/auth", () => ({ ensureAnonUser }));
@@ -16,12 +17,47 @@ vi.mock("@/lib/server/supabase", () => ({
       insert: (row: Record<string, unknown>) => { state.inserted = row; return { select: () => ({ single: async () => ({ data: { id: "d1" }, error: null }) }) }; },
       update: () => ({ eq: () => ({ select: () => ({ single: async () => ({ data: { id: "d1" }, error: null }) }) }) }),
     }),
+    rpc: (...a: unknown[]) => rpc(...a),
   }),
 }));
 
-import { sendDebateMessage } from "@/lib/server/debates";
+import { joinDebateQueue, sendDebateMessage } from "@/lib/server/debates";
 
-beforeEach(() => { ensureAnonUser.mockReset(); state.debateRow = null; state.inserted = null; ensureAnonUser.mockResolvedValue({ id: "ua", isAnonymous: false }); });
+beforeEach(() => {
+  ensureAnonUser.mockReset();
+  rpc.mockReset();
+  state.debateRow = null;
+  state.inserted = null;
+  ensureAnonUser.mockResolvedValue({ id: "ua", isAnonymous: false });
+  rpc.mockResolvedValue({ data: [{ debate_id: "d1", matched: true }], error: null });
+});
+
+describe("joinDebateQueue", () => {
+  it("rejects an invalid side without calling rpc", async () => {
+    const r = await joinDebateQueue("11111111-1111-1111-1111-111111111111", "C" as "A");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("invalid_input");
+    expect(rpc).not.toHaveBeenCalled();
+  });
+  it("rejects a non-uuid question id without calling rpc", async () => {
+    const r = await joinDebateQueue("nope", "A");
+    expect(r.ok).toBe(false);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+  it("calls rpc with join_debate + p_* args and returns debateId and matched", async () => {
+    const r = await joinDebateQueue("11111111-1111-1111-1111-111111111111", "A");
+    expect(rpc).toHaveBeenCalledWith("join_debate", {
+      p_question_id: "11111111-1111-1111-1111-111111111111",
+      p_side: "A",
+      p_user_id: "ua",
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data.debateId).toBe("d1");
+      expect(r.data.matched).toBe(true);
+    }
+  });
+});
 
 describe("sendDebateMessage", () => {
   it("rejects a non-participant", async () => {
