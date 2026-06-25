@@ -3,8 +3,8 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { joinDebateQueue, getQueueCounts } from "@/lib/debates";
-import { ensureSession } from "@/lib/anon";
+import { getQueueCounts } from "@/lib/debates";
+import { joinDebateQueue, cancelQueue } from "@/lib/server/debates";
 import { QueueWait } from "@/components/debate/QueueWait";
 import type { Choice, Debate } from "@/types";
 
@@ -34,11 +34,13 @@ function QueueContent() {
       });
 
     setJoining(true);
-    ensureSession().then((userId) => joinDebateQueue(questionId, side, userId)).then(({ debate: d, matched }) => {
-      setDebate(d);
+    joinDebateQueue(questionId, side).then((res) => {
+      if (!res.ok) { setJoining(false); router.back(); return; }
+      const { debateId, matched } = res.data;
+      setDebate({ id: debateId } as Debate);
       setJoining(false);
       if (matched) {
-        router.replace(`/debate/${d.id}?side=${side}`);
+        router.replace(`/debate/${debateId}?side=${side}`);
       }
     });
   }, [questionId, side, router]);
@@ -63,7 +65,7 @@ function QueueContent() {
 
   const handleCancel = async () => {
     if (debate) {
-      await supabase.from("debates").delete().eq("id", debate.id);
+      await cancelQueue(debate.id);
     }
     router.back();
   };

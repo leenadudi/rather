@@ -1,0 +1,89 @@
+"use server";
+
+import { ensureAnonUser } from "@/lib/server/auth";
+import { createServiceSupabase } from "@/lib/server/supabase";
+import { run } from "@/lib/server/run";
+import { ActionError, type ActionResult } from "@/lib/server/result";
+import { parseOrThrow, joinDebateSchema, debateMessageSchema } from "@/lib/server/validation";
+
+export async function joinDebateQueue(questionId: string, side: "A" | "B"): Promise<ActionResult<{ debateId: string; matched: boolean }>> {
+  return run(async () => {
+    const input = parseOrThrow(joinDebateSchema, { questionId, side });
+    const user = await ensureAnonUser();
+    const db = createServiceSupabase();
+    const opposite = input.side === "A" ? "B" : "A";
+    const waitingCol = opposite === "A" ? "user_a_id" : "user_b_id";
+    const myCol = input.side === "A" ? "user_a_id" : "user_b_id";
+
+    const { data: waiting } = await db
+      .from("debates").select("*")
+      .eq("question_id", input.questionId).eq("status", "waiting")
+      .not(waitingCol, "is", null).limit(1).single();
+
+    if (waiting) {
+      const { data: matched } = await db
+        .from("debates")
+        .update({ [myCol]: user.id, status: "active", started_at: new Date().toISOString() })
+        .eq("id", (waiting as { id: string }).id).select().single();
+      return { debateId: (matched as { id: string }).id, matched: true };
+    }
+    const { data: created } = await db
+      .from("debates").insert({ question_id: input.questionId, [myCol]: user.id, status: "waiting" })
+      .select().single();
+    return { debateId: (created as { id: string }).id, matched: false };
+  });
+}
+
+async function loadParticipantSide(db: ReturnType<typeof createServiceSupabase>, debateId: string, userId: string): Promise<"A" | "B"> {
+  const { data } = await db.from("debates").select("user_a_id, user_b_id").eq("id", debateId).single();
+  const row = data as { user_a_id: string | null; user_b_id: string | null } | null;
+  if (row?.user_a_id === userId) return "A";
+  if (row?.user_b_id === userId) return "B";
+  throw new ActionError("not_participant", "you are not part of this debate");
+}
+
+export async function sendDebateMessage(debateId: string, content: string): Promise<ActionResult<null>> {
+  return run(async () => {
+    const input = parseOrThrow(debateMessageSchema, { debateId, content });
+    const user = await ensureAnonUser();
+    const db = createServiceSupabase();
+    const side = await loadParticipantSide(db, input.debateId, user.id);
+    await db.from("debate_messages").insert({ debate_id: input.debateId, sender_side: side, content: input.content });
+    return null;
+  });
+}
+
+export async function endDebate(debateId: string): Promise<ActionResult<null>> {
+  return run(async () => {
+    const user = await ensureAnonUser();
+    const db = createServiceSupabase();
+    await loadParticipantSide(db, debateId, user.id); // throws if not a participant
+    await db.from("debates").update({ status: "ended", ended_at: new Date().toISOString() }).eq("id", debateId);
+    return null;
+  });
+}
+
+export async function flagDebateMessage(messageId: string, debateId: string): Promise<ActionResult<{ flagCount: number }>> {
+  return run(async () => {
+    await ensureAnonUser();
+    const db = createServiceSupabase();
+    await db.from("debate_messages").update({ flagged: true }).eq("id", messageId);
+    const { data } = await db.from("debates").select("flag_count").eq("id", debateId).single();
+    const newCount = ((data as { flag_count: number } | null)?.flag_count ?? 0) + 1;
+    await db.from("debates").update({ flag_count: newCount }).eq("id", debateId);
+    if (newCount >= 2) {
+      await db.from("debates").update({ status: "flagged", ended_at: new Date().toISOString() }).eq("id", debateId);
+    }
+    return { flagCount: newCount };
+  });
+}
+
+export async function cancelQueue(debateId: string): Promise<ActionResult<null>> {
+  return run(async () => {
+    const user = await ensureAnonUser();
+    const db = createServiceSupabase();
+    await loadParticipantSide(db, debateId, user.id);
+    await db.from("debates").update({ status: "ended", ended_at: new Date().toISOString() }).eq("id", debateId);
+    return null;
+  });
+}

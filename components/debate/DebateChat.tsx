@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { sendDebateMessage, endDebate, getDebateMessages } from "@/lib/debates";
+import { getDebateMessages } from "@/lib/debates";
+import { sendDebateMessage, endDebate } from "@/lib/server/debates";
 import type { Choice, Debate, DebateMessage as TMessage } from "@/types";
 import { DebateTimer } from "./DebateTimer";
 import { DebateMessage } from "./DebateMessage";
@@ -88,8 +89,8 @@ export function DebateChat({ debate, mySide, optionA, optionB, isAnon }: Props) 
   }, [messages]);
 
   const handleSend = useCallback(async (content: string) => {
-    await sendDebateMessage(debate.id, mySide, content);
-  }, [debate.id, mySide]);
+    await sendDebateMessage(debate.id, content);
+  }, [debate.id]);
 
   const handleEnd = useCallback(async () => {
     await endDebate(debate.id);
