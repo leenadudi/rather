@@ -1,134 +1,62 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-async function googleSignIn() {
-  // Save the current anonymous session ID so the callback can migrate votes.
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session?.user?.is_anonymous) {
-    sessionStorage.setItem("wyr_anon_migrate", session.user.id);
-  }
-  await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: { redirectTo: `${window.location.origin}/auth/callback` },
-  });
-}
-
 export default function SigninPage() {
-  const router = useRouter();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("");
+  const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!username.trim() || !password) return;
-    setLoading(true);
+  const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined;
+
+  async function continueWithGoogle() {
     setError("");
+    const { data: { user } } = await supabase.auth.getUser();
+    // Anonymous user → link in place (keeps id + data). Otherwise sign in.
+    const fn = user?.is_anonymous
+      ? supabase.auth.linkIdentity({ provider: "google", options: { redirectTo } })
+      : supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } });
+    const { error } = await fn;
+    if (error) setError(error.message);
+  }
 
-    const fakeEmail = `${username.trim().toLowerCase()}@wyr.internal`;
-    const { error: authErr } = await supabase.auth.signInWithPassword({
-      email: fakeEmail,
-      password,
-    });
-
-    if (authErr) {
-      setError("incorrect username or password");
-      setLoading(false);
-      return;
-    }
-
-    router.push("/");
-  };
+  async function sendMagicLink(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    const { data: { user } } = await supabase.auth.getUser();
+    // Anonymous → attach email in place; else send a normal OTP sign-in link.
+    const { error } = user?.is_anonymous
+      ? await supabase.auth.updateUser({ email })
+      : await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
+    if (error) setError(error.message);
+    else setSent(true);
+  }
 
   return (
-    <main className="min-h-screen bg-background flex">
-      {/* Left: welcome */}
-      <div className="hidden lg:flex flex-col flex-1 justify-center px-12 border-r border-border-light">
-        <h1 className="text-3xl font-bold text-text-primary mb-3">welcome back</h1>
-        <p className="text-sm text-text-secondary">
-          your history, character cards, and friends are waiting.
-        </p>
-      </div>
+    <main className="min-h-screen bg-background flex items-center justify-center px-6 py-12">
+      <div className="w-full max-w-sm">
+        <h2 className="text-2xl font-bold text-text-primary mb-1">save your account</h2>
+        <p className="text-sm text-text-secondary mb-6">keep your votes, character cards, and friends across devices.</p>
 
-      {/* Right: form */}
-      <div className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-sm">
-          <h2 className="text-2xl font-bold text-text-primary mb-6">sign in</h2>
+        <button onClick={continueWithGoogle} className="w-full flex items-center justify-center gap-3 py-3 bg-card border border-border rounded-xl text-sm font-medium text-text-primary hover:border-text-secondary transition-colors mb-6">
+          <GoogleIcon /> continue with google
+        </button>
 
-          {/* OAuth button */}
-          <button
-            onClick={googleSignIn}
-            className="w-full flex items-center justify-center gap-3 py-3 bg-card border border-border rounded-xl text-sm font-medium text-text-primary hover:border-text-secondary transition-colors mb-6"
-          >
-            <GoogleIcon />
-            continue with google
-          </button>
-
-          <div className="flex items-center gap-3 mb-6">
-            <div className="flex-1 h-px bg-border-light" />
-            <span className="text-xs text-text-muted">or use username</span>
-            <div className="flex-1 h-px bg-border-light" />
-          </div>
-
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div>
-              <label className="text-xs font-semibold text-text-secondary block mb-1.5">
-                username
-              </label>
-              <input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="your username"
-                autoFocus
-                className="w-full text-sm px-4 py-3 rounded-xl border border-border bg-card text-text-primary placeholder:text-text-muted focus:outline-none focus:border-text-secondary transition-colors"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-text-secondary block mb-1.5">
-                password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="your password"
-                className="w-full text-sm px-4 py-3 rounded-xl border border-border bg-card text-text-primary placeholder:text-text-muted focus:outline-none focus:border-text-secondary transition-colors"
-              />
-            </div>
-
-            {error && (
-              <p className="text-sm text-error bg-error-bg px-3 py-2 rounded-xl">{error}</p>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-dark text-white font-semibold rounded-xl disabled:opacity-50 hover:bg-text-secondary transition-colors mt-1"
-            >
-              {loading ? "signing in…" : "sign in"}
-            </button>
-          </form>
-
-          <div className="mt-5 text-sm text-text-muted text-center space-y-2">
-            <p>
-              <Link href="/recover" className="hover:text-text-secondary underline">
-                forgot your username?
-              </Link>
-            </p>
-            <p>
-              don&apos;t have an account?{" "}
-              <Link href="/signup" className="text-side-a hover:underline">
-                create one
-              </Link>
-            </p>
-          </div>
+        <div className="flex items-center gap-3 mb-6">
+          <div className="flex-1 h-px bg-border-light" /><span className="text-xs text-text-muted">or email me a link</span><div className="flex-1 h-px bg-border-light" />
         </div>
+
+        {sent ? (
+          <p className="text-sm text-text-secondary bg-card border border-border-light rounded-xl px-4 py-3">check your email for a sign-in link.</p>
+        ) : (
+          <form onSubmit={sendMagicLink} className="flex flex-col gap-3">
+            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com"
+              className="w-full text-sm px-4 py-3 rounded-xl border border-border bg-card text-text-primary placeholder:text-text-muted focus:outline-none focus:border-text-secondary transition-colors" />
+            <button type="submit" className="w-full py-3 bg-dark text-white font-semibold rounded-xl hover:bg-text-secondary transition-colors">email me a link</button>
+          </form>
+        )}
+        {error && <p className="text-sm text-error bg-error-bg px-3 py-2 rounded-xl mt-4">{error}</p>}
       </div>
     </main>
   );

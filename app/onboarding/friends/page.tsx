@@ -28,7 +28,7 @@ export default function OnboardingFriendsPage() {
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) { router.replace("/signup"); return; }
+      if (!data.user) { router.replace("/signin"); return; }
       setUserId(data.user.id);
 
       const { data: u } = await supabase

@@ -98,7 +98,7 @@ export default function YouPage() {
             your choices.
           </p>
           <Link
-            href="/signup"
+            href="/signin"
             className="block w-full py-3 bg-dark text-white font-semibold rounded-xl text-center hover:bg-text-secondary transition-colors mb-3"
           >
             create free account

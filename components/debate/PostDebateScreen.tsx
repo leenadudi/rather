@@ -68,7 +68,7 @@ export function PostDebateScreen({ messageCount, durationSec, isAnon }: Props) {
             create a free account to keep your debate history, character card, and more
           </p>
           <Link
-            href="/signup"
+            href="/signin"
             className="block w-full text-center bg-dark text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-text-secondary transition-colors"
           >
             create free account

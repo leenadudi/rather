@@ -28,7 +28,7 @@ export function FriendGate() {
             <li>• predict their answers</li>
             <li>• friend knowledge score</li>
           </ul>
-          <Link href="/signup" className="block w-full py-2.5 bg-dark text-white text-sm font-semibold rounded-xl text-center hover:bg-text-secondary transition-colors mb-2">
+          <Link href="/signin" className="block w-full py-2.5 bg-dark text-white text-sm font-semibold rounded-xl text-center hover:bg-text-secondary transition-colors mb-2">
             create free account
           </Link>
           <Link href="/signin" className="text-xs text-text-muted hover:text-text-secondary">
