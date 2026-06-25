@@ -10,24 +10,6 @@ export async function searchUser(username: string): Promise<User | null> {
   return data as User | null;
 }
 
-export async function sendFriendRequest(fromId: string, toId: string) {
-  const { error } = await supabase.from("friend_requests").insert({
-    from_user_id: fromId,
-    to_user_id: toId,
-  });
-  return !error;
-}
-
-export async function respondToRequest(
-  requestId: string,
-  status: "accepted" | "declined"
-) {
-  await supabase
-    .from("friend_requests")
-    .update({ status })
-    .eq("id", requestId);
-}
-
 export async function getFriends(userId: string): Promise<User[]> {
   const { data } = await supabase
     .from("friend_requests")

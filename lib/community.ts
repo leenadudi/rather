@@ -134,28 +134,6 @@ export async function getCommunityQuestion(
   };
 }
 
-export async function submitCommunityQuestion(
-  optionA: string,
-  optionB: string,
-  userId: string
-): Promise<{ question: Question | null; error: string | null }> {
-  const now = new Date().toISOString();
-  const { data, error } = await supabase
-    .from("questions")
-    .insert({
-      option_a: optionA.trim(),
-      option_b: optionB.trim(),
-      type: "community",
-      author_id: userId,
-      debate_enabled: false,
-      published_at: now,
-    })
-    .select()
-    .single();
-  if (error) return { question: null, error: error.message };
-  return { question: data as Question, error: null };
-}
-
 export async function getCommunityStats(userId: string): Promise<CommunityStats> {
   const { data: mine } = await supabase
     .from("questions")

@@ -1,21 +1,6 @@
 import { supabase } from "./supabase";
 import type { Choice, Prediction } from "@/types";
 
-export async function makePrediction(
-  predictorId: string,
-  targetId: string,
-  questionId: string,
-  predictedChoice: Choice
-): Promise<boolean> {
-  const { error } = await supabase.from("predictions").insert({
-    predictor_id: predictorId,
-    target_id: targetId,
-    question_id: questionId,
-    predicted_choice: predictedChoice,
-  });
-  return !error;
-}
-
 export async function getPredictions(
   predictorId: string,
   questionId: string

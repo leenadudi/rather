@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { makePrediction } from "@/lib/server/social";
 import type { Choice } from "@/types";
 
 interface FriendVote {
@@ -95,10 +96,7 @@ export function GroupSidebar({ questionId, myChoice, optionA, optionB }: Props) 
 
   const handlePredict = async (targetId: string, choice: Choice) => {
     if (!userId) return;
-    await supabase.from("predictions").upsert(
-      { predictor_id: userId, target_id: targetId, question_id: questionId, predicted_choice: choice },
-      { onConflict: "predictor_id,target_id,question_id" }
-    );
+    await makePrediction(targetId, questionId, choice);
     setPredictions((p) => ({ ...p, [targetId]: choice }));
   };
 

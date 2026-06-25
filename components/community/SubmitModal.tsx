@@ -1,16 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { submitCommunityQuestion } from "@/lib/community";
-import type { Question } from "@/types";
+import { useRouter } from "next/navigation";
+import { submitCommunityQuestion } from "@/lib/server/community";
 
 interface Props {
-  userId: string | null;
   onClose: () => void;
-  onSubmitted: (q: Question) => void;
 }
 
-export function SubmitModal({ userId, onClose, onSubmitted }: Props) {
+export function SubmitModal({ onClose }: Props) {
+  const router = useRouter();
   const [optionA, setOptionA] = useState("");
   const [optionB, setOptionB] = useState("");
   const [error, setError] = useState("");
@@ -18,7 +17,6 @@ export function SubmitModal({ userId, onClose, onSubmitted }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userId) { setError("something went wrong — try reloading"); return; }
     const a = optionA.trim();
     const b = optionB.trim();
     if (a.length < 2 || b.length < 2) { setError("both options need a few more characters"); return; }
@@ -26,13 +24,13 @@ export function SubmitModal({ userId, onClose, onSubmitted }: Props) {
 
     setLoading(true);
     setError("");
-    const { question, error: err } = await submitCommunityQuestion(a, b, userId);
-    if (err || !question) {
-      setError(err ?? "couldn't post — try again");
+    const res = await submitCommunityQuestion(a, b);
+    if (!res.ok) {
+      setError(res.error ?? "couldn't post — try again");
       setLoading(false);
       return;
     }
-    onSubmitted(question);
+    router.push(`/explore/${res.data.id}`);
   };
 
   return (

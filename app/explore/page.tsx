@@ -181,12 +181,7 @@ function ExploreContent() {
 
       {showSubmit && (
         <SubmitModal
-          userId={userId}
           onClose={() => setShowSubmit(false)}
-          onSubmitted={(q) => {
-            setShowSubmit(false);
-            router.push(`/explore/${q.id}`);
-          }}
         />
       )}
     </main>

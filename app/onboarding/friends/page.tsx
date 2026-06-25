@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { sendFriendRequest, searchUser } from "@/lib/friends";
+import { searchUser } from "@/lib/friends";
+import { sendFriendRequest } from "@/lib/server/social";
 
 // Simulated suggested users — in production this could be most-active recent users
 const MOCK_SUGGESTIONS = [
@@ -76,10 +77,9 @@ export default function OnboardingFriendsPage() {
   };
 
   const handleAdd = async (targetUsername: string) => {
-    if (!userId) return;
     const found = await searchUser(targetUsername);
     if (!found) return;
-    await sendFriendRequest(userId, found.id);
+    await sendFriendRequest(found.id);
     setSuggestions((s) =>
       s.map((x) => (x.username === targetUsername ? { ...x, sent: true } : x))
     );

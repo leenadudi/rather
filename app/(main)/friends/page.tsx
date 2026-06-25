@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { searchUser, sendFriendRequest, getPendingRequests, respondToRequest } from "@/lib/friends";
+import { searchUser, getPendingRequests } from "@/lib/friends";
+import { sendFriendRequest, respondToFriendRequest } from "@/lib/server/social";
 import { FriendGate } from "@/components/gates/FriendGate";
 import type { FriendRequest, User } from "@/types";
 
@@ -51,15 +52,14 @@ export default function FriendsPage() {
   };
 
   const handleSendRequest = async (targetId: string) => {
-    if (!userId) return;
     setSending(true);
-    await sendFriendRequest(userId, targetId);
+    await sendFriendRequest(targetId);
     setSentTo((prev) => [...prev, targetId]);
     setSending(false);
   };
 
   const handleRespond = async (requestId: string, status: "accepted" | "declined") => {
-    await respondToRequest(requestId, status);
+    await respondToFriendRequest(requestId, status === "accepted");
     setPendingRequests((prev) => prev.filter((r) => r.id !== requestId));
     if (status === "accepted") {
       // Refresh friend list
