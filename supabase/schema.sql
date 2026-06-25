@@ -120,23 +120,16 @@ alter table debate_messages enable row level security;
 alter table friend_requests enable row level security;
 alter table predictions enable row level security;
 
--- RLS policies (permissive for now — tighten per table as needed)
-create policy "public read questions" on questions for select using (true);
-create policy "public read votes" on votes for select using (true);
-create policy "public insert votes" on votes for insert with check (true);
-create policy "public read comments" on comments for select using (true);
-create policy "public insert comments" on comments for insert with check (true);
-create policy "public read debates" on debates for select using (true);
-create policy "public insert debates" on debates for insert with check (true);
-create policy "public update debates" on debates for update using (true);
-create policy "public read debate_messages" on debate_messages for select using (true);
-create policy "public insert debate_messages" on debate_messages for insert with check (true);
-create policy "public update debate_messages" on debate_messages for update using (true);
-create policy "public insert comment_likes" on comment_likes for insert with check (true);
-create policy "public read friend_requests" on friend_requests for select using (auth.uid() = from_user_id or auth.uid() = to_user_id);
-create policy "auth insert friend_requests" on friend_requests for insert with check (auth.uid() = from_user_id);
-create policy "auth update friend_requests" on friend_requests for update using (auth.uid() = to_user_id);
-create policy "public read predictions" on predictions for select using (true);
-create policy "auth insert predictions" on predictions for insert with check (auth.uid() = predictor_id);
-create policy "users read own" on users for select using (true);
-create policy "users insert own" on users for insert with check (auth.uid() = id);
+-- RLS policies (Phase 2 lockdown: browser read-only; all writes via service-role server actions)
+create policy "read questions" on questions for select using (true);
+create policy "read votes" on votes for select using (true);
+create policy "read comments" on comments for select using (true);
+create policy "read debates" on debates for select using (true);
+create policy "read debate_messages" on debate_messages for select using (true);
+create policy "read users" on users for select using (true);
+create policy "read own friend_requests" on friend_requests
+  for select using (auth.uid() = from_user_id or auth.uid() = to_user_id);
+create policy "read own predictions" on predictions
+  for select using (auth.uid() = predictor_id or auth.uid() = target_id);
+
+-- No INSERT/UPDATE/DELETE policies exist for the browser role on any table.
