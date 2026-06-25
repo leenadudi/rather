@@ -23,8 +23,6 @@ create index if not exists questions_type_created_idx on questions (type, create
 create table if not exists users (
   id uuid primary key references auth.users on delete cascade,
   username text unique not null,
-  recovery_code text not null,
-  recovery_email text,
   created_at timestamptz default now()
 );
 

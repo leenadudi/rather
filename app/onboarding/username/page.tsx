@@ -2,9 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
-import { generateRecoveryCode, hashRecoveryCode } from "@/lib/recovery";
-import { RecoveryCodeScreen } from "@/components/account/RecoveryCodeScreen";
+import { setUsername } from "@/lib/server/account";
 
 const SUGGESTIONS = [
   "ghost_42", "anon_user", "mystery91", "quiet_fog", "dusk_wave",
@@ -17,12 +15,10 @@ function randomSuggestions() {
 
 export default function ChooseUsernamePage() {
   const router = useRouter();
-  const [username, setUsername] = useState("");
+  const [username, setUsernameInput] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [suggestions] = useState(randomSuggestions);
-  const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,57 +28,14 @@ export default function ChooseUsernamePage() {
     setLoading(true);
     setError("");
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.replace("/signin"); return; }
-
-    const { data: existing } = await supabase
-      .from("users")
-      .select("id")
-      .eq("username", u)
-      .single();
-
-    if (existing) {
-      setError("that username is taken — try another");
+    const res = await setUsername(u);
+    if (res.ok) {
+      router.replace("/onboarding/friends");
+    } else {
+      setError(res.error);
       setLoading(false);
-      return;
     }
-
-    // OAuth users still need a recovery code: it's the only account-recovery
-    // path that doesn't depend on the OAuth provider, and the column is
-    // NOT NULL. Mirror the signup flow so the row inserts cleanly.
-    const code = generateRecoveryCode();
-    const hashed = await hashRecoveryCode(code);
-
-    const { error: insertErr } = await supabase
-      .from("users")
-      .insert({ id: user.id, username: u, recovery_code: hashed });
-
-    if (insertErr) {
-      // 23505 = unique violation (someone claimed the name between check and insert).
-      setError(
-        insertErr.code === "23505"
-          ? "that username is taken — try another"
-          : "couldn't save username — try again"
-      );
-      setLoading(false);
-      return;
-    }
-
-    setUserId(user.id);
-    setRecoveryCode(code);
-    setLoading(false);
   };
-
-  const handleRecoveryConfirm = async (email?: string) => {
-    if (email && userId) {
-      await supabase.from("users").update({ recovery_email: email }).eq("id", userId);
-    }
-    router.replace("/onboarding/friends");
-  };
-
-  if (recoveryCode) {
-    return <RecoveryCodeScreen code={recoveryCode} onConfirm={handleRecoveryConfirm} />;
-  }
 
   return (
     <main className="min-h-screen bg-background flex items-center justify-center px-4">
@@ -96,7 +49,7 @@ export default function ChooseUsernamePage() {
           <div>
             <input
               value={username}
-              onChange={(e) => { setUsername(e.target.value); setError(""); }}
+              onChange={(e) => { setUsernameInput(e.target.value); setError(""); }}
               placeholder="pick anything — it's just for you"
               autoFocus
               className="w-full text-sm px-4 py-3 rounded-xl border border-border bg-card text-text-primary placeholder:text-text-muted focus:outline-none focus:border-text-secondary transition-colors"
@@ -107,7 +60,7 @@ export default function ChooseUsernamePage() {
                 <button
                   key={s}
                   type="button"
-                  onClick={() => setUsername(s)}
+                  onClick={() => setUsernameInput(s)}
                   className="text-xs text-text-secondary border border-border-light px-2.5 py-1 rounded-full hover:border-text-muted transition-colors"
                 >
                   {s}
