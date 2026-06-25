@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Choice, Comment } from "@/types";
-import { getComments, getReplies, postComment, likeComment, type CommentSort, type CommentFilter } from "@/lib/comments";
+import { getComments, getReplies, type CommentSort, type CommentFilter } from "@/lib/comments";
+import { postComment, likeComment } from "@/lib/server/comments";
 import { SortTabs } from "./SortTabs";
 import { FilterChips } from "./FilterChips";
 import { CommentItem } from "./CommentItem";
@@ -38,14 +39,15 @@ export function CommentSection({ questionId, myChoice, userId, optionA, optionB 
   useEffect(() => { load(); }, [load]);
 
   const handlePost = async (content: string) => {
-    const created = await postComment(questionId, content, myChoice, userId);
+    const res = await postComment(questionId, content, myChoice);
+    const created = res.ok ? res.data : null;
     if (created) {
       setComments((prev) => [{ ...created, likes: 0, replies: [] }, ...prev]);
     }
   };
 
   const handleLike = async (commentId: string) => {
-    await likeComment(commentId, userId);
+    await likeComment(commentId);
     setComments((prev) =>
       prev.map((c) => {
         if (c.id === commentId) return { ...c, likes: c.likes + 1, liked_by_me: true };
@@ -60,7 +62,8 @@ export function CommentSection({ questionId, myChoice, userId, optionA, optionB 
   };
 
   const handleReply = async (parentId: string, content: string) => {
-    const created = await postComment(questionId, content, myChoice, userId, parentId);
+    const res = await postComment(questionId, content, myChoice, parentId);
+    const created = res.ok ? res.data : null;
     if (created) {
       setComments((prev) =>
         prev.map((c) =>
