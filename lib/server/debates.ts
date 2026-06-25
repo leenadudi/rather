@@ -65,8 +65,9 @@ export async function endDebate(debateId: string): Promise<ActionResult<null>> {
 
 export async function flagDebateMessage(messageId: string, debateId: string): Promise<ActionResult<{ flagCount: number }>> {
   return run(async () => {
-    await ensureAnonUser();
+    const user = await ensureAnonUser();
     const db = createServiceSupabase();
+    await loadParticipantSide(db, debateId, user.id);
     await db.from("debate_messages").update({ flagged: true }).eq("id", messageId);
     const { data } = await db.from("debates").select("flag_count").eq("id", debateId).single();
     const newCount = ((data as { flag_count: number } | null)?.flag_count ?? 0) + 1;
