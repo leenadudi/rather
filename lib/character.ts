@@ -20,7 +20,7 @@ export async function buildCharacterCard(
 
   const { data: votes } = await supabase
     .from("votes")
-    .select("choice, question_id, vote_changed")
+    .select("choice, question_id")
     .eq("user_id", userId)
     .gte("created_at", start)
     .lt("created_at", end);
@@ -80,7 +80,6 @@ export async function buildCharacterCard(
     }
   }
 
-  const mindChanges = votes.filter((v) => v.vote_changed).length;
   const { count: debateCount } = await supabase
     .from("debates")
     .select("*", { count: "exact", head: true })
@@ -97,7 +96,7 @@ export async function buildCharacterCard(
     stats: {
       questions: votes.length,
       debates: debateCount ?? 0,
-      mind_changes: mindChanges,
+      mind_changes: 0, // vote-change tracking not yet implemented; always 0 until wired up
     },
   };
 }
