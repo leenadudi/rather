@@ -30,6 +30,7 @@ export async function getCommunityFeed(
     .from("questions")
     .select("*")
     .eq("type", "community")
+    .neq("status", "hidden")
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -108,6 +109,7 @@ export async function getCommunityQuestion(
     .select("*")
     .eq("id", id)
     .eq("type", "community")
+    .neq("status", "hidden")
     .single();
   if (!q) return null;
 
@@ -132,6 +134,11 @@ export async function getCommunityQuestion(
     my_choice: (myVote.data?.choice as Choice) ?? null,
     author_username: (author.data as { username: string } | null)?.username ?? null,
   };
+}
+
+export async function getReportedQuestions(): Promise<Question[]> {
+  const { data } = await supabase.from("questions").select("*").eq("status", "hidden").order("created_at", { ascending: false });
+  return (data ?? []) as Question[];
 }
 
 export async function getCommunityStats(userId: string): Promise<CommunityStats> {

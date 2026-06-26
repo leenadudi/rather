@@ -22,6 +22,11 @@ export const friendRequestSchema = z.object({ toId: uuid });
 export const respondRequestSchema = z.object({ requestId: uuid, accept: z.boolean() });
 export const predictionSchema = z.object({ targetId: uuid, questionId: uuid, choice });
 export const usernameSchema = z.object({ username: z.string().trim().toLowerCase().min(3).max(20).regex(/^[a-z0-9_]+$/) });
+export const reportSchema = z.object({
+  targetType: z.enum(["question", "comment"]),
+  targetId: z.string().uuid(),
+  reason: z.string().trim().max(500).optional(),
+});
 
 export function parseOrThrow<S extends z.ZodTypeAny>(schema: S, input: unknown): z.infer<S> {
   const result = schema.safeParse(input);
