@@ -90,6 +90,7 @@ function QueueContent() {
       document.removeEventListener("visibilitychange", onHidden);
       window.removeEventListener("pagehide", onHidden);
       // Unmount while still waiting and not matched => leaving the queue.
+      // pagehide may have already fired cancelQueue; the server action is idempotent (status flip by id), so a double call is safe.
       if (!matchedRef.current) cancelQueue(debate.id);
     };
   }, [debate]);
