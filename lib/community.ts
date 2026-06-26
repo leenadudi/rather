@@ -137,7 +137,12 @@ export async function getCommunityQuestion(
 }
 
 export async function getReportedQuestions(): Promise<Question[]> {
-  const { data } = await supabase.from("questions").select("*").eq("status", "hidden").order("created_at", { ascending: false });
+  const { data } = await supabase
+    .from("questions")
+    .select("*")
+    .eq("type", "community")
+    .eq("status", "hidden")
+    .order("created_at", { ascending: false });
   return (data ?? []) as Question[];
 }
 
