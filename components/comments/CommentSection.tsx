@@ -24,6 +24,7 @@ export function CommentSection({ questionId, myChoice, userId, optionA, optionB 
   const [filter, setFilter] = useState<CommentFilter>("all");
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [postError, setPostError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -41,7 +42,12 @@ export function CommentSection({ questionId, myChoice, userId, optionA, optionB 
   useEffect(() => { load(); }, [load]);
 
   const handlePost = async (content: string) => {
+    setPostError(null);
     const res = gate(await postComment(questionId, content, myChoice));
+    if (!res.ok && res.code === "rate_limited") {
+      setPostError(res.error);
+      return;
+    }
     const created = res.ok ? res.data : null;
     if (created) {
       setComments((prev) => [{ ...created, likes: 0, replies: [] }, ...prev]);
@@ -93,6 +99,9 @@ export function CommentSection({ questionId, myChoice, userId, optionA, optionB 
 
       <div className="mb-4">
         <CommentInput onPost={handlePost} />
+        {postError && (
+          <p className="mt-2 text-sm text-red-500">{postError}</p>
+        )}
       </div>
 
       {loading ? (

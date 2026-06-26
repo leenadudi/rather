@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ActionError } from "@/lib/server/result";
 
-const { requireAccount, insert } = vi.hoisted(() => ({
+const { requireAccount, insert, checkRateLimit } = vi.hoisted(() => ({
   requireAccount: vi.fn(),
   insert: vi.fn(),
+  checkRateLimit: vi.fn(),
 }));
 vi.mock("@/lib/server/auth", () => ({ requireAccount }));
+vi.mock("@/lib/server/ratelimit", () => ({ checkRateLimit }));
 vi.mock("@/lib/server/supabase", () => ({
   createServiceSupabase: () => ({
     from: () => ({
@@ -22,7 +24,9 @@ import { submitCommunityQuestion } from "@/lib/server/community";
 beforeEach(() => {
   requireAccount.mockReset();
   insert.mockReset();
+  checkRateLimit.mockReset();
   requireAccount.mockResolvedValue({ id: "u1", isAnonymous: false });
+  checkRateLimit.mockResolvedValue(undefined);
 });
 
 describe("submitCommunityQuestion", () => {

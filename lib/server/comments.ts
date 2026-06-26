@@ -6,6 +6,7 @@ import { run } from "@/lib/server/run";
 import { parseOrThrow, commentSchema, likeSchema } from "@/lib/server/validation";
 import type { ActionResult } from "@/lib/server/result";
 import type { Comment } from "@/types";
+import { checkRateLimit } from "@/lib/server/ratelimit";
 
 export async function postComment(
   questionId: string,
@@ -16,6 +17,7 @@ export async function postComment(
   return run(async () => {
     const input = parseOrThrow(commentSchema, { questionId, content, choice, parentId });
     const user = await requireAccount();
+    await checkRateLimit(user.id, "comment", 10, 60);
     const db = createServiceSupabase();
     const { data, error } = await db
       .from("comments")

@@ -1,15 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ActionError } from "@/lib/server/result";
 
-const { requireAccount, friendInsert, selectSingle, respondUpdate, predUpsert } = vi.hoisted(() => ({
+const { requireAccount, friendInsert, selectSingle, respondUpdate, predUpsert, checkRateLimit } = vi.hoisted(() => ({
   requireAccount: vi.fn(),
   friendInsert: vi.fn(),
   selectSingle: vi.fn(),
   respondUpdate: vi.fn(),
   predUpsert: vi.fn(),
+  checkRateLimit: vi.fn(),
 }));
 
 vi.mock("@/lib/server/auth", () => ({ requireAccount }));
+vi.mock("@/lib/server/ratelimit", () => ({ checkRateLimit }));
 vi.mock("@/lib/server/supabase", () => ({
   createServiceSupabase: () => ({
     from: (table: string) => ({
@@ -39,8 +41,9 @@ vi.mock("@/lib/server/supabase", () => ({
 import { sendFriendRequest, respondToFriendRequest, makePrediction } from "@/lib/server/social";
 
 beforeEach(() => {
-  [requireAccount, friendInsert, selectSingle, respondUpdate, predUpsert].forEach((m) => m.mockReset());
+  [requireAccount, friendInsert, selectSingle, respondUpdate, predUpsert, checkRateLimit].forEach((m) => m.mockReset());
   requireAccount.mockResolvedValue({ id: "u1", isAnonymous: false });
+  checkRateLimit.mockResolvedValue(undefined);
 });
 
 describe("sendFriendRequest", () => {

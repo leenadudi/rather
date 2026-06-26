@@ -5,11 +5,13 @@ import { createServiceSupabase } from "@/lib/server/supabase";
 import { run } from "@/lib/server/run";
 import { ActionError, type ActionResult } from "@/lib/server/result";
 import { parseOrThrow, friendRequestSchema, respondRequestSchema, predictionSchema } from "@/lib/server/validation";
+import { checkRateLimit } from "@/lib/server/ratelimit";
 
 export async function sendFriendRequest(toId: string): Promise<ActionResult<null>> {
   return run(async () => {
     const input = parseOrThrow(friendRequestSchema, { toId });
     const user = await requireAccount();
+    await checkRateLimit(user.id, "friend_req", 20, 3600);
     const db = createServiceSupabase();
     const { error } = await db.from("friend_requests").insert({ from_user_id: user.id, to_user_id: input.toId, status: "pending" });
     if (error) throw error;
@@ -35,6 +37,7 @@ export async function makePrediction(targetId: string, questionId: string, choic
   return run(async () => {
     const input = parseOrThrow(predictionSchema, { targetId, questionId, choice });
     const user = await requireAccount();
+    await checkRateLimit(user.id, "prediction", 60, 3600);
     const db = createServiceSupabase();
     const { error } = await db.from("predictions").upsert(
       { predictor_id: user.id, target_id: input.targetId, question_id: input.questionId, predicted_choice: input.choice },

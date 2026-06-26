@@ -5,6 +5,7 @@ import { createServiceSupabase } from "@/lib/server/supabase";
 import { run } from "@/lib/server/run";
 import { ActionError, type ActionResult } from "@/lib/server/result";
 import { parseOrThrow, joinDebateSchema, debateMessageSchema } from "@/lib/server/validation";
+import { checkRateLimit } from "@/lib/server/ratelimit";
 
 export async function joinDebateQueue(questionId: string, side: "A" | "B"): Promise<ActionResult<{ debateId: string; matched: boolean }>> {
   return run(async () => {
@@ -34,6 +35,7 @@ export async function sendDebateMessage(debateId: string, content: string): Prom
   return run(async () => {
     const input = parseOrThrow(debateMessageSchema, { debateId, content });
     const user = await requireAccount();
+    await checkRateLimit(user.id, "debate_msg", 30, 60);
     const db = createServiceSupabase();
     const side = await loadParticipantSide(db, input.debateId, user.id);
     await db.from("debate_messages").insert({ debate_id: input.debateId, sender_side: side, content: input.content });

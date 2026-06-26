@@ -3,9 +3,11 @@ import { ActionError } from "@/lib/server/result";
 
 const requireAccount = vi.hoisted(() => vi.fn());
 const rpc = vi.hoisted(() => vi.fn());
+const checkRateLimit = vi.hoisted(() => vi.fn());
 const state: { debateRow: Record<string, unknown> | null; inserted: Record<string, unknown> | null } = { debateRow: null, inserted: null };
 
 vi.mock("@/lib/server/auth", () => ({ requireAccount }));
+vi.mock("@/lib/server/ratelimit", () => ({ checkRateLimit }));
 vi.mock("@/lib/server/supabase", () => ({
   createServiceSupabase: () => ({
     from: (table: string) => ({
@@ -27,10 +29,12 @@ import { joinDebateQueue, sendDebateMessage } from "@/lib/server/debates";
 beforeEach(() => {
   requireAccount.mockReset();
   rpc.mockReset();
+  checkRateLimit.mockReset();
   state.debateRow = null;
   state.inserted = null;
   requireAccount.mockResolvedValue({ id: "ua", isAnonymous: false });
   rpc.mockResolvedValue({ data: [{ debate_id: "d1", matched: true }], error: null });
+  checkRateLimit.mockResolvedValue(undefined);
 });
 
 describe("joinDebateQueue", () => {
