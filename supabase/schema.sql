@@ -14,6 +14,7 @@ create table if not exists questions (
   debate_enabled boolean default true,
   type text not null default 'daily', -- 'daily' | 'community'
   author_id uuid references auth.users on delete set null,
+  status text not null default 'approved' check (status in ('approved', 'hidden')),
   created_at timestamptz default now()
 );
 
@@ -108,6 +109,18 @@ create table if not exists rate_limits (
   count int not null default 0,
   primary key (user_id, action, window_start)
 );
+
+-- Reports (Phase 6: report-based moderation)
+create table if not exists reports (
+  id uuid primary key default gen_random_uuid(),
+  reporter_id uuid references auth.users on delete set null,
+  target_type text not null check (target_type in ('question', 'comment')),
+  target_id uuid not null,
+  reason text,
+  created_at timestamptz default now(),
+  unique (reporter_id, target_type, target_id)
+);
+create index if not exists reports_target_idx on reports (target_type, target_id);
 
 -- RPC: increment comment likes atomically
 create or replace function increment_comment_likes(cid uuid)
@@ -206,6 +219,7 @@ alter table debate_messages enable row level security;
 alter table friend_requests enable row level security;
 alter table predictions enable row level security;
 alter table rate_limits enable row level security;
+alter table reports enable row level security;
 
 -- RLS policies (Phase 2 lockdown: browser read-only; all writes via service-role server actions)
 create policy "read questions" on questions for select using (true);
@@ -218,5 +232,7 @@ create policy "read own friend_requests" on friend_requests
   for select using (auth.uid() = from_user_id or auth.uid() = to_user_id);
 create policy "read own predictions" on predictions
   for select using (auth.uid() = predictor_id or auth.uid() = target_id);
+create policy "read own reports" on reports
+  for select using (auth.uid() = reporter_id);
 
 -- No INSERT/UPDATE/DELETE policies exist for the browser role on any table.
