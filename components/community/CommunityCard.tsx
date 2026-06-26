@@ -59,17 +59,6 @@ export function CommunityCard({ question, userId }: Props) {
       onClick={goToQuestion}
       className="bg-card border border-border-light rounded-2xl overflow-hidden cursor-pointer hover:border-border transition-colors"
     >
-      {/* Header */}
-      <div className="px-5 py-2.5 border-b border-border-light flex items-center gap-2 text-[11px] text-text-muted">
-        <span>would you rather…</span>
-        <span>·</span>
-        <span>{relativeTime(question.created_at)}</span>
-        <span>·</span>
-        <span>{counts.total.toLocaleString()} votes</span>
-        <span>·</span>
-        <span>💬 {question.comment_count}</span>
-      </div>
-
       {/* Two sides */}
       <div className="flex relative">
         <Side
