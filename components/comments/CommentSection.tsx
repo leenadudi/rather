@@ -100,7 +100,7 @@ export function CommentSection({ questionId, myChoice, userId, optionA, optionB 
       <div className="mb-4">
         <CommentInput onPost={handlePost} />
         {postError && (
-          <p className="mt-2 text-sm text-red-500">{postError}</p>
+          <p className="mt-2 text-sm text-error">{postError}</p>
         )}
       </div>
 
