@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Question, QuestionDimension } from "@/types";
+import { adminCreateQuestion, adminDeleteQuestion, adminSetQuestionStatus } from "@/lib/server/admin";
+import { getReportedQuestions } from "@/lib/community";
 
 const DIMENSIONS: { value: QuestionDimension | "none"; label: string; description: string }[] = [
   { value: "none", label: "none — just for fun", description: "won't affect character card" },
@@ -38,12 +40,12 @@ export default function AdminPage() {
   const [liveCounts, setLiveCounts] = useState<{ a: number; b: number; total: number } | null>(null);
   const [dbError, setDbError] = useState(false);
 
-  // Access is gated by middleware.ts (HTTP Basic Auth) before this renders.
-  useEffect(() => {
-    loadQuestions();
-  }, []);
+  // Moderation queue state
+  const [reportedQuestions, setReportedQuestions] = useState<Question[]>([]);
+  const [moderating, setModerating] = useState<string | null>(null);
 
-  const loadQuestions = async () => {
+  // Access is gated by middleware.ts (HTTP Basic Auth) before this renders.
+  const loadQuestions = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("questions")
@@ -69,7 +71,17 @@ export default function AdminPage() {
       setLiveCounts({ a, b, total: a + b });
     }
     setLoading(false);
-  };
+  }, []);
+
+  const loadReportedQuestions = useCallback(async () => {
+    const reported = await getReportedQuestions();
+    setReportedQuestions(reported);
+  }, []);
+
+  useEffect(() => {
+    loadQuestions();
+    loadReportedQuestions();
+  }, [loadQuestions, loadReportedQuestions]);
 
   const handlePost = async () => {
     if (!optionA.trim() || !optionB.trim()) {
@@ -89,16 +101,16 @@ export default function AdminPage() {
     setPosting(true);
     setPostMsg(null);
 
-    const { error } = await supabase.from("questions").insert({
-      option_a: optionA.trim(),
-      option_b: optionB.trim(),
+    const res = await adminCreateQuestion({
+      optionA,
+      optionB,
       dimension: dimension === "none" ? null : dimension,
-      debate_enabled: debateEnabled,
-      published_at: publishAt,
+      debateEnabled,
+      publishedAt: publishAt,
     });
 
-    if (error) {
-      setPostMsg({ text: error.message, ok: false });
+    if (!res.ok) {
+      setPostMsg({ text: res.error, ok: false });
     } else {
       setPostMsg({ text: "question posted ✓", ok: true });
       setOptionA("");
@@ -110,8 +122,27 @@ export default function AdminPage() {
 
   const handleKill = async (id: string) => {
     if (!confirm("delete this question?")) return;
-    await supabase.from("questions").delete().eq("id", id);
+    await adminDeleteQuestion(id);
     loadQuestions();
+  };
+
+  const handleRestore = async (id: string) => {
+    setModerating(id);
+    const res = await adminSetQuestionStatus(id, "approved");
+    if (res.ok) {
+      await loadReportedQuestions();
+    }
+    setModerating(null);
+  };
+
+  const handleDeleteReported = async (id: string) => {
+    if (!confirm("permanently delete this reported question?")) return;
+    setModerating(id);
+    const res = await adminDeleteQuestion(id);
+    if (res.ok) {
+      await loadReportedQuestions();
+    }
+    setModerating(null);
   };
 
   // ── DB not set up yet ─────────────────────────────────────
@@ -275,7 +306,7 @@ export default function AdminPage() {
       </section>
 
       {/* Question queue */}
-      <section>
+      <section className="mb-8">
         <h2 className="text-sm font-bold text-text-primary mb-4">
           question queue ({questions.length})
         </h2>
@@ -327,6 +358,50 @@ export default function AdminPage() {
                 </div>
               );
             })}
+          </div>
+        )}
+      </section>
+
+      {/* Moderation queue */}
+      <section>
+        <h2 className="text-sm font-bold text-text-primary mb-4">
+          moderation queue ({reportedQuestions.length})
+        </h2>
+
+        {reportedQuestions.length === 0 ? (
+          <p className="text-sm text-text-muted">no reported questions — queue is clear</p>
+        ) : (
+          <div className="space-y-2">
+            {reportedQuestions.map((q) => (
+              <div
+                key={q.id}
+                className="rounded-xl px-4 py-3 flex items-start justify-between gap-4 border bg-warning-bg border-yellow-200"
+              >
+                <div className="flex-1 min-w-0">
+                  <span className="text-[10px] font-bold text-warning uppercase tracking-wider block mb-1">
+                    hidden — reported
+                  </span>
+                  <p className="text-sm text-text-primary font-medium truncate">{q.option_a}</p>
+                  <p className="text-sm text-text-secondary truncate">or {q.option_b}</p>
+                </div>
+                <div className="flex gap-2 shrink-0 mt-1">
+                  <button
+                    onClick={() => handleRestore(q.id)}
+                    disabled={moderating === q.id}
+                    className="text-xs text-side-a hover:text-green-700 font-medium disabled:opacity-40"
+                  >
+                    restore
+                  </button>
+                  <button
+                    onClick={() => handleDeleteReported(q.id)}
+                    disabled={moderating === q.id}
+                    className="text-xs text-error hover:text-red-700 font-medium disabled:opacity-40"
+                  >
+                    delete
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </section>
