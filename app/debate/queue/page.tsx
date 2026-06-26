@@ -1,10 +1,10 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getQueueCounts } from "@/lib/debates";
-import { joinDebateQueue, cancelQueue } from "@/lib/server/debates";
+import { joinDebateQueue, cancelQueue, heartbeatQueue } from "@/lib/server/debates";
 import { useAccountGate } from "@/components/auth/useRequireAccount";
 import { QueueWait } from "@/components/debate/QueueWait";
 import type { Choice, Debate } from "@/types";
@@ -16,6 +16,7 @@ function QueueContent() {
   const questionId = params.get("question") ?? "";
   const side = (params.get("side") ?? "A") as Choice;
 
+  const matchedRef = useRef(false);
   const [debate, setDebate] = useState<Debate | null>(null);
   const [queueCounts, setQueueCounts] = useState({ a: 0, b: 0 });
   const [joining, setJoining] = useState(false);
@@ -43,6 +44,7 @@ function QueueContent() {
       setDebate({ id: debateId, status: "waiting" } as Debate);
       setJoining(false);
       if (matched) {
+        matchedRef.current = true;
         router.replace(`/debate/${debateId}?side=${side}`);
       }
     });
@@ -58,6 +60,7 @@ function QueueContent() {
         (payload) => {
           const updated = payload.new as Debate;
           if (updated.status === "active") {
+            matchedRef.current = true;
             router.replace(`/debate/${debate.id}?side=${side}`);
           }
         }
@@ -65,6 +68,31 @@ function QueueContent() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [debate, side, router]);
+
+  useEffect(() => {
+    if (!debate || debate.status !== "waiting") return;
+
+    const ping = () => { heartbeatQueue(debate.id); };
+    ping(); // immediate, so a slow first interval doesn't let us look stale
+    const interval = setInterval(ping, 10_000);
+
+    // Best-effort cancel if the user backgrounds or closes the tab while waiting.
+    const onHidden = () => {
+      if (document.visibilityState === "hidden" && !matchedRef.current) {
+        cancelQueue(debate.id);
+      }
+    };
+    document.addEventListener("visibilitychange", onHidden);
+    window.addEventListener("pagehide", onHidden);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onHidden);
+      window.removeEventListener("pagehide", onHidden);
+      // Unmount while still waiting and not matched => leaving the queue.
+      if (!matchedRef.current) cancelQueue(debate.id);
+    };
+  }, [debate]);
 
   const handleCancel = async () => {
     if (debate) {
