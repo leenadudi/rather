@@ -4,7 +4,7 @@ import { requireAccount } from "@/lib/server/auth";
 import { createServiceSupabase } from "@/lib/server/supabase";
 import { run } from "@/lib/server/run";
 import { ActionError, type ActionResult } from "@/lib/server/result";
-import { parseOrThrow, joinDebateSchema, debateMessageSchema } from "@/lib/server/validation";
+import { parseOrThrow, joinDebateSchema, debateMessageSchema, heartbeatSchema } from "@/lib/server/validation";
 import { checkRateLimit } from "@/lib/server/ratelimit";
 
 export async function joinDebateQueue(questionId: string, side: "A" | "B"): Promise<ActionResult<{ debateId: string; matched: boolean }>> {
@@ -75,6 +75,20 @@ export async function cancelQueue(debateId: string): Promise<ActionResult<null>>
     const db = createServiceSupabase();
     await loadParticipantSide(db, debateId, user.id);
     await db.from("debates").update({ status: "ended", ended_at: new Date().toISOString() }).eq("id", debateId);
+    return null;
+  });
+}
+
+export async function heartbeatQueue(debateId: string): Promise<ActionResult<null>> {
+  return run(async () => {
+    const input = parseOrThrow(heartbeatSchema, { debateId });
+    const user = await requireAccount();
+    const db = createServiceSupabase();
+    await loadParticipantSide(db, input.debateId, user.id); // throws not_participant
+    await db.from("debates")
+      .update({ last_seen_at: new Date().toISOString() })
+      .eq("id", input.debateId)
+      .eq("status", "waiting"); // no-op once matched/ended
     return null;
   });
 }

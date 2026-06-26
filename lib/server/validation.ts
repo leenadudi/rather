@@ -14,6 +14,7 @@ export const commentSchema = z.object({
 export const likeSchema = z.object({ commentId: uuid });
 export const joinDebateSchema = z.object({ questionId: uuid, side: choice });
 export const debateMessageSchema = z.object({ debateId: uuid, content: z.string().trim().min(1).max(1000) });
+export const heartbeatSchema = z.object({ debateId: uuid });
 export const communitySubmitSchema = z.object({
   optionA: z.string().trim().min(2).max(120),
   optionB: z.string().trim().min(2).max(120),
