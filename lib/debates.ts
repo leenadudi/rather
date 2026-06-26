@@ -11,11 +11,13 @@ export async function getDebateMessages(debateId: string): Promise<DebateMessage
 }
 
 export async function getQueueCounts(questionId: string): Promise<{ a: number; b: number }> {
+  const freshSince = new Date(Date.now() - 30_000).toISOString();
   const { data } = await supabase
     .from("debates")
     .select("user_a_id, user_b_id")
     .eq("question_id", questionId)
-    .eq("status", "waiting");
+    .eq("status", "waiting")
+    .gt("last_seen_at", freshSince);
 
   let a = 0, b = 0;
   for (const row of data ?? []) {
