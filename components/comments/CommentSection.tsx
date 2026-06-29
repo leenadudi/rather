@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useAccountGate } from "@/components/auth/useRequireAccount";
 import type { Choice, Comment } from "@/types";
 import { getComments, getReplies, type CommentSort, type CommentFilter } from "@/lib/comments";
@@ -13,7 +14,7 @@ import { CommentInput } from "./CommentInput";
 interface Props {
   questionId: string;
   myChoice: Choice;
-  userId: string;
+  userId: string | null;
   optionA?: string;
   optionB?: string;
 }
@@ -98,9 +99,21 @@ export function CommentSection({ questionId, myChoice, userId, optionA, optionB 
       </div>
 
       <div className="mb-4">
-        <CommentInput onPost={handlePost} />
-        {postError && (
-          <p className="mt-2 text-sm text-error">{postError}</p>
+        {userId ? (
+          <>
+            <CommentInput onPost={handlePost} />
+            {postError && (
+              <p className="mt-2 text-sm text-error">{postError}</p>
+            )}
+          </>
+        ) : (
+          <Link
+            href="/signin"
+            className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-text-muted hover:border-text-secondary transition-colors"
+          >
+            <span>create an account to join the conversation</span>
+            <span className="font-semibold text-text-primary shrink-0">sign up →</span>
+          </Link>
         )}
       </div>
 

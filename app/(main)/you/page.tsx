@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { buildCharacterCard } from "@/lib/character";
+import { getTodayQuestion } from "@/lib/questions";
+import { getMyVote } from "@/lib/votes";
 import { CharacterCard } from "@/components/character/CharacterCard";
 import { CharacterProgress } from "@/components/character/CharacterProgress";
 import type { CharacterCard as TCard } from "@/types";
@@ -24,6 +26,8 @@ export default function YouPage() {
   const [pastCards, setPastCards] = useState<PastCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  const [votedToday, setVotedToday] = useState(false);
+  const [hasTodayQuestion, setHasTodayQuestion] = useState(true);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -35,17 +39,21 @@ export default function YouPage() {
       const year = now.getFullYear();
       const month = now.getMonth() + 1;
 
-      const [built, votesRes] = await Promise.all([
+      const [built, votesRes, todayQ] = await Promise.all([
         buildCharacterCard(uid, year, month),
         supabase
           .from("votes")
           .select("*", { count: "exact", head: true })
           .eq("user_id", uid)
           .gte("created_at", new Date(year, month - 1, 1).toISOString()),
+        getTodayQuestion(),
       ]);
 
       setCurrentCard(built);
       setVoteCount(votesRes.count ?? 0);
+
+      setHasTodayQuestion(!!todayQ);
+      if (todayQ) setVotedToday((await getMyVote(todayQ.id, uid)) !== null);
 
       // Fetch past 4 months
       const past: PastCard[] = [];
@@ -133,7 +141,7 @@ export default function YouPage() {
       {currentCard ? (
         <CharacterCard card={currentCard} />
       ) : (
-        <CharacterProgress voteCount={voteCount} />
+        <CharacterProgress voteCount={voteCount} votedToday={votedToday} hasTodayQuestion={hasTodayQuestion} />
       )}
 
       {/* Past months */}

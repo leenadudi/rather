@@ -1,35 +1,50 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { Avatar } from "@/components/Avatar";
 
 export function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
-  const [initials, setInitials] = useState<string | null>(null);
+  const [username, setUsername] = useState<string | null>(null);
+  const [avatarColor, setAvatarColor] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    async function loadUser() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || user.is_anonymous) { setUserId(null); return; }
+    async function applyUser(user: { id: string } | null | undefined) {
+      if (!user) { setUserId(null); setUsername(null); setAvatarColor(null); return; }
       setUserId(user.id);
-      const { data: u } = await supabase.from("users").select("username").eq("id", user.id).single();
-      if (u?.username) setInitials(u.username.slice(0, 2).toUpperCase());
+      const { data: u } = await supabase.from("users").select("username, avatar_color").eq("id", user.id).single();
+      setUsername(u?.username ?? null);
+      setAvatarColor(u?.avatar_color ?? null);
     }
-    loadUser();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_e, session) => {
-      const user = session?.user;
-      if (!user || user.is_anonymous) { setUserId(null); setInitials(null); return; }
-      setUserId(user.id);
-      const { data: u } = await supabase.from("users").select("username").eq("id", user.id).single();
-      if (u?.username) setInitials(u.username.slice(0, 2).toUpperCase());
-      else setInitials(null);
-    });
+    supabase.auth.getUser().then(({ data }) => applyUser(data.user));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => applyUser(session?.user));
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // Close the profile menu on outside click or Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuOpen(false); };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onClick); document.removeEventListener("keydown", onKey); };
+  }, [menuOpen]);
+
+  async function handleSignOut() {
+    setMenuOpen(false);
+    await supabase.auth.signOut();
+  }
 
   const today = new Date();
   const dateStr = today
@@ -54,37 +69,64 @@ export function Navbar() {
 
         {/* Right: user state */}
         <div className="flex items-center gap-2">
-          {pathname.startsWith("/explore") && (
-            <button
-              onClick={() => window.dispatchEvent(new Event("wyr:submit"))}
-              className="hidden sm:block px-4 py-1.5 bg-dark text-white text-xs font-semibold rounded-full hover:bg-text-secondary transition-colors"
-            >
-              + submit a wyr
-            </button>
-          )}
+          <button
+            onClick={() => {
+              // On /explore the page listens for this event and opens the modal
+              // in place; elsewhere, navigate to explore with the modal open.
+              if (pathname.startsWith("/explore")) window.dispatchEvent(new Event("wyr:submit"));
+              else router.push("/explore?submit=1");
+            }}
+            className="hidden sm:block px-4 py-1.5 bg-dark text-white text-xs font-semibold rounded-full hover:bg-text-secondary transition-colors"
+          >
+            + submit a wyr
+          </button>
           {userId ? (
-            <button
-              onClick={() => supabase.auth.signOut()}
-              className="w-8 h-8 rounded-full bg-dark text-white text-xs font-bold flex items-center justify-center hover:bg-text-secondary transition-colors"
-              title="sign out"
-            >
-              {initials ?? "?"}
-            </button>
-          ) : (
-            <>
-              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-side-b-bg rounded-full">
-                <svg className="w-3 h-3 text-side-b" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
-                </svg>
-                <span className="text-xs text-side-b font-medium">anonymous</span>
-              </div>
-              <Link
-                href="/signin"
-                className="px-4 py-1.5 bg-dark text-white text-xs font-semibold rounded-full hover:bg-text-secondary transition-colors"
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setMenuOpen((o) => !o)}
+                className="rounded-full hover:opacity-80 transition-opacity ring-offset-2 ring-offset-background focus:outline-none focus-visible:ring-2 focus-visible:ring-text-primary"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                title="account"
               >
-                sign in
-              </Link>
-            </>
+                <Avatar seed={username ?? userId} color={avatarColor} size={32} />
+              </button>
+              {menuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 mt-2 w-44 bg-card border border-border-light rounded-xl shadow-lg py-1 z-50"
+                >
+                  {username && (
+                    <div className="px-4 py-2 text-sm font-semibold text-text-primary truncate border-b border-border-light mb-1">
+                      {username}
+                    </div>
+                  )}
+                  <Link
+                    href="/settings"
+                    role="menuitem"
+                    onClick={() => setMenuOpen(false)}
+                    className="block px-4 py-2 text-sm text-text-secondary hover:bg-background hover:text-text-primary transition-colors"
+                  >
+                    settings
+                  </Link>
+                  <div className="my-1 h-px bg-border-light" />
+                  <button
+                    role="menuitem"
+                    onClick={handleSignOut}
+                    className="block w-full text-left px-4 py-2 text-sm text-error hover:bg-background transition-colors"
+                  >
+                    log out
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Link
+              href="/signin"
+              className="px-4 py-1.5 bg-dark text-white text-xs font-semibold rounded-full hover:bg-text-secondary transition-colors"
+            >
+              create account
+            </Link>
           )}
         </div>
       </div>

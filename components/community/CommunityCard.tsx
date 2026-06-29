@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Choice, CommunityQuestion, VoteCounts } from "@/types";
 import { castVote } from "@/lib/server/votes";
+import { readLocalVote, writeLocalVote } from "@/lib/localVotes";
 
 interface Props {
   question: CommunityQuestion;
@@ -25,13 +26,16 @@ export function relativeTime(iso: string): string {
 
 export function CommunityCard({ question, userId }: Props) {
   const router = useRouter();
-  const [myChoice, setMyChoice] = useState<Choice | null>(question.my_choice);
+  // Signed-in users get my_choice from the server; visitors from this browser.
+  const [myChoice, setMyChoice] = useState<Choice | null>(
+    question.my_choice ?? (userId ? null : readLocalVote(question.id))
+  );
   const [counts, setCounts] = useState<VoteCounts>(question.counts);
   const [saving, setSaving] = useState(false);
 
   const handleVote = async (choice: Choice, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (myChoice || saving || !userId) return;
+    if (myChoice || saving) return;
     setSaving(true);
     // optimistic
     setMyChoice(choice);
@@ -45,6 +49,7 @@ export function CommunityCard({ question, userId }: Props) {
     if (!res.ok) {
       // keep existing error handling path
     } else {
+      if (!userId) writeLocalVote(question.id, choice, res.data.voteId);
       setCounts(res.data);
     }
     setSaving(false);
@@ -67,7 +72,7 @@ export function CommunityCard({ question, userId }: Props) {
           pct={counts.pct_a}
           chosen={myChoice === "A"}
           voted={voted}
-          disabled={saving || !userId}
+          disabled={saving}
           onVote={(e) => handleVote("A", e)}
         />
         <div className="w-px bg-border-light" />
@@ -77,7 +82,7 @@ export function CommunityCard({ question, userId }: Props) {
           pct={counts.pct_b}
           chosen={myChoice === "B"}
           voted={voted}
-          disabled={saving || !userId}
+          disabled={saving}
           onVote={(e) => handleVote("B", e)}
         />
         {/* "or" pill */}
@@ -85,6 +90,16 @@ export function CommunityCard({ question, userId }: Props) {
           <span className="text-[10px] text-text-muted">or</span>
         </div>
       </div>
+
+      {/* Discuss — always available, works before or after voting (the result
+          halves above become disabled buttons and swallow clicks). */}
+      <button
+        onClick={(e) => { e.stopPropagation(); goToQuestion(); }}
+        className="w-full border-t border-border-light px-5 py-2.5 flex items-center justify-between text-xs text-text-muted hover:text-text-primary hover:bg-background transition-colors"
+      >
+        <span>💬 {question.comment_count} {question.comment_count === 1 ? "comment" : "comments"}</span>
+        <span className="font-semibold">discuss →</span>
+      </button>
     </div>
   );
 }

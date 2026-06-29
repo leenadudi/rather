@@ -13,20 +13,23 @@ export default function TranscriptPage() {
   const [messages, setMessages] = useState<DebateMessage[]>([]);
   const [question, setQuestion] = useState<Question | null>(null);
   const [mySide, setMySide] = useState<"A" | "B" | null>(null);
+  const [isParticipant, setIsParticipant] = useState<boolean | null>(null);
 
   useEffect(() => {
     async function load() {
-      const { data: user } = await supabase.auth.getUser();
-      const uid = user.user?.id;
+      const { data: { user } } = await supabase.auth.getUser();
+      const uid = user?.id;
 
       const { data: d } = await supabase.from("debates").select("*").eq("id", id).single();
-      if (!d) return;
+      if (!d) { setIsParticipant(false); return; }
       setDebate(d as Debate);
 
-      if (uid) {
-        if (d.user_a_id === uid) setMySide("A");
-        else if (d.user_b_id === uid) setMySide("B");
-      }
+      const participant = !!uid && (d.user_a_id === uid || d.user_b_id === uid);
+      setIsParticipant(participant);
+      if (!participant) return;  // transcripts are private to the two debaters
+
+      if (d.user_a_id === uid) setMySide("A");
+      else if (d.user_b_id === uid) setMySide("B");
 
       const msgs = await getDebateMessages(id);
       setMessages(msgs);
@@ -36,6 +39,20 @@ export default function TranscriptPage() {
     }
     load();
   }, [id]);
+
+  if (isParticipant === false) {
+    return (
+      <main className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="text-center max-w-xs">
+          <p className="text-text-secondary text-lg font-medium">this transcript is private</p>
+          <p className="text-text-muted text-sm mt-2">only the two people who debated can read it.</p>
+          <Link href="/" className="inline-block mt-5 text-sm text-text-muted hover:text-text-primary underline">
+            back to today&apos;s question
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   if (!debate || !question) {
     return <main className="min-h-screen bg-background flex items-center justify-center">

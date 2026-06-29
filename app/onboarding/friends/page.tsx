@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { searchUser } from "@/lib/friends";
 import { sendFriendRequest } from "@/lib/server/social";
+import { Avatar } from "@/components/Avatar";
 
 // Simulated suggested users — in production this could be most-active recent users
 const MOCK_SUGGESTIONS = [
@@ -126,9 +127,7 @@ export default function OnboardingFriendsPage() {
       {searchResult && (
         <div className="flex items-center justify-between bg-card border border-border-light rounded-xl px-4 py-3 mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-side-a-bg flex items-center justify-center text-xs font-bold text-side-a">
-              {searchResult.slice(0, 2).toUpperCase()}
-            </div>
+            <Avatar seed={searchResult} size={32} />
             <span className="text-sm font-medium text-text-primary">{searchResult}</span>
           </div>
           <button
@@ -162,9 +161,7 @@ export default function OnboardingFriendsPage() {
                 className="bg-card border border-border-light rounded-2xl px-4 py-4 flex flex-col gap-3"
               >
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-border-light flex items-center justify-center text-xs font-bold text-text-secondary">
-                    {s.username.slice(0, 2).toUpperCase()}
-                  </div>
+                  <Avatar seed={s.username} size={32} />
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-text-primary truncate">{s.username}</p>
                     <p className="text-[10px] text-text-muted">🔥 {s.streak} day streak</p>

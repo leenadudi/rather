@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ensureSession } from "@/lib/anon";
+import { supabase } from "@/lib/supabase";
 import { getCommunityQuestion } from "@/lib/community";
 import { castVote } from "@/lib/server/votes";
+import { readLocalVote, writeLocalVote } from "@/lib/localVotes";
 import { CommentSection } from "@/components/comments/CommentSection";
 import { relativeTime } from "@/components/community/CommunityCard";
 import type { Choice, CommunityQuestion, VoteCounts } from "@/types";
@@ -21,12 +22,14 @@ export default function ExploreQuestionPage() {
 
   useEffect(() => {
     async function load() {
-      const uid = await ensureSession();
+      const { data: { user } } = await supabase.auth.getUser();
+      const uid = user?.id ?? null;
       setUserId(uid);
       const data = await getCommunityQuestion(id, uid);
       if (!data) { setLoading(false); return; }
       setQ(data);
-      setMyChoice(data.my_choice);
+      // Visitors have no server-side vote; fall back to this browser's memory.
+      setMyChoice(data.my_choice ?? (uid ? null : readLocalVote(id)));
       setCounts(data.counts);
       setLoading(false);
     }
@@ -34,13 +37,14 @@ export default function ExploreQuestionPage() {
   }, [id]);
 
   const handleVote = async (choice: Choice) => {
-    if (!q || myChoice || saving || !userId) return;
+    if (!q || myChoice || saving) return;
     setSaving(true);
     setMyChoice(choice);
     const res = await castVote(q.id, choice);
     if (!res.ok) {
       // keep existing error handling path — revert optimistic state
     } else {
+      if (!userId) writeLocalVote(q.id, choice, res.data.voteId);
       setCounts(res.data);
     }
     setSaving(false);
@@ -85,17 +89,17 @@ export default function ExploreQuestionPage() {
         {/* Vote */}
         <div className="bg-card border border-border-light rounded-2xl overflow-hidden">
           <div className="flex relative">
-            <VoteSide side="A" label={q.option_a} pct={counts.pct_a} chosen={myChoice === "A"} voted={voted} disabled={saving || !userId} onVote={() => handleVote("A")} />
+            <VoteSide side="A" label={q.option_a} pct={counts.pct_a} chosen={myChoice === "A"} voted={voted} disabled={saving} onVote={() => handleVote("A")} />
             <div className="w-px bg-border-light" />
-            <VoteSide side="B" label={q.option_b} pct={counts.pct_b} chosen={myChoice === "B"} voted={voted} disabled={saving || !userId} onVote={() => handleVote("B")} />
+            <VoteSide side="B" label={q.option_b} pct={counts.pct_b} chosen={myChoice === "B"} voted={voted} disabled={saving} onVote={() => handleVote("B")} />
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card border border-border-light rounded-full w-8 h-8 flex items-center justify-center">
               <span className="text-[10px] text-text-muted">or</span>
             </div>
           </div>
         </div>
 
-        {/* Comments — unlocked after voting */}
-        {voted && userId ? (
+        {/* Comments — readable by everyone after voting; posting needs an account */}
+        {voted ? (
           <div className="bg-card border border-border-light rounded-2xl p-5">
             <CommentSection
               questionId={q.id}

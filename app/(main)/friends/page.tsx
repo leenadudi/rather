@@ -6,6 +6,7 @@ import { searchUser, getPendingRequests } from "@/lib/friends";
 import { sendFriendRequest, respondToFriendRequest } from "@/lib/server/social";
 import { useAccountGate } from "@/components/auth/useRequireAccount";
 import { FriendGate } from "@/components/gates/FriendGate";
+import { Avatar } from "@/components/Avatar";
 import type { FriendRequest, User } from "@/types";
 
 export default function FriendsPage() {
@@ -108,9 +109,7 @@ export default function FriendsPage() {
         {searchResult && searchResult !== "not-found" && (
           <div className="mt-3 bg-card border border-border-light rounded-xl px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-border-light flex items-center justify-center text-xs text-text-muted font-medium">
-                {searchResult.username[0]?.toUpperCase()}
-              </div>
+              <Avatar seed={searchResult.username} size={32} />
               <span className="text-sm font-medium text-text-primary">{searchResult.username}</span>
             </div>
             {searchResult.id === userId ? (
@@ -138,9 +137,7 @@ export default function FriendsPage() {
             {pendingRequests.map((req) => (
               <div key={req.id} className="bg-card border border-border-light rounded-xl px-4 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-border-light flex items-center justify-center text-xs font-medium text-text-muted">
-                    {(req.from_user as { username?: string } | undefined)?.username?.[0]?.toUpperCase() ?? "?"}
-                  </div>
+                  <Avatar seed={(req.from_user as { username?: string } | undefined)?.username ?? "?"} size={32} />
                   <span className="text-sm font-medium text-text-primary">
                     {(req.from_user as { username?: string } | undefined)?.username ?? "someone"}
                   </span>
@@ -168,9 +165,7 @@ export default function FriendsPage() {
           <div className="space-y-2">
             {friends.map((f) => (
               <div key={f.id} className="bg-card border border-border-light rounded-xl px-4 py-3 flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-border-light flex items-center justify-center text-xs font-medium text-text-muted">
-                  {f.username[0]?.toUpperCase()}
-                </div>
+                <Avatar seed={f.username} size={32} />
                 <span className="text-sm font-medium text-text-primary">{f.username}</span>
               </div>
             ))}

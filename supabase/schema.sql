@@ -24,6 +24,7 @@ create index if not exists questions_type_created_idx on questions (type, create
 create table if not exists users (
   id uuid primary key references auth.users on delete cascade,
   username text unique not null,
+  avatar_color text,
   created_at timestamptz default now()
 );
 
@@ -130,21 +131,42 @@ begin
 end;
 $$;
 
--- Atomic vote: upsert (one vote per user/question) then return fresh tallies.
+-- Atomic vote: insert (one vote per user/question) then return fresh tallies +
+-- the relevant vote row id (so an anonymous vote can be claimed after signup).
+drop function if exists cast_vote(uuid, char, uuid);
 create or replace function cast_vote(p_question_id uuid, p_choice char, p_user_id uuid)
-returns table(a int, b int, total int, pct_a int, pct_b int)
+returns table(vote_id uuid, a int, b int, total int, pct_a int, pct_b int)
 language plpgsql security definer as $$
-declare va int; vb int; vt int;
+declare va int; vb int; vt int; v_id uuid;
 begin
   insert into votes(question_id, choice, user_id)
     values (p_question_id, p_choice, p_user_id)
-    on conflict (question_id, user_id) do nothing;
+    on conflict (question_id, user_id) do nothing
+    returning id into v_id;
+  if v_id is null and p_user_id is not null then
+    select id into v_id from votes where question_id = p_question_id and user_id = p_user_id;
+  end if;
   select count(*) filter (where choice = 'A'), count(*) filter (where choice = 'B')
     into va, vb from votes where question_id = p_question_id;
   vt := va + vb;
-  return query select va, vb, vt,
+  return query select v_id, va, vb, vt,
     case when vt = 0 then 50 else round(va::numeric / vt * 100)::int end,
     case when vt = 0 then 50 else round(vb::numeric / vt * 100)::int end;
+end; $$;
+
+-- Reassign one still-anonymous vote row to an account (or drop it if the account
+-- already voted on that question). Used to "save" a visitor's answer after signup.
+create or replace function claim_vote(p_vote_id uuid, p_user_id uuid)
+returns void language plpgsql security definer as $$
+declare v_qid uuid;
+begin
+  select question_id into v_qid from votes where id = p_vote_id and user_id is null;
+  if v_qid is null then return; end if;
+  if exists (select 1 from votes where question_id = v_qid and user_id = p_user_id) then
+    delete from votes where id = p_vote_id;
+  else
+    update votes set user_id = p_user_id where id = p_vote_id;
+  end if;
 end; $$;
 
 -- Atomic matchmaking: lock a waiting opposite-side debate (SKIP LOCKED so two
@@ -154,6 +176,13 @@ returns table(debate_id uuid, matched boolean)
 language plpgsql security definer as $$
 declare w_id uuid;
 begin
+  if not exists (
+    select 1 from votes
+    where question_id = p_question_id and user_id = p_user_id and choice = p_side
+  ) then
+    raise exception 'must vote on this question before debating' using errcode = 'P0001';
+  end if;
+
   if p_side = 'A' then
     select id into w_id from debates
       where question_id = p_question_id and status = 'waiting' and user_b_id is not null

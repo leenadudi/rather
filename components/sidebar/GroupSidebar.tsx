@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { makePrediction } from "@/lib/server/social";
 import { useAccountGate } from "@/components/auth/useRequireAccount";
+import { Avatar } from "@/components/Avatar";
 import type { Choice } from "@/types";
 
 interface FriendVote {
@@ -28,6 +29,7 @@ export function GroupSidebar({ questionId, myChoice, optionA, optionB }: Props) 
   const gate = useAccountGate();
   const [userId, setUserId] = useState<string | null>(null);
   const [myUsername, setMyUsername] = useState<string | null>(null);
+  const [myColor, setMyColor] = useState<string | null>(null);
   const [friendVotes, setFriendVotes] = useState<FriendVote[]>([]);
   const [predictions, setPredictions] = useState<Record<string, Choice>>({});
   const [loaded, setLoaded] = useState(false);
@@ -39,7 +41,7 @@ export function GroupSidebar({ questionId, myChoice, optionA, optionB }: Props) 
       setUserId(uid);
 
       const [userRow, friends] = await Promise.all([
-        supabase.from("users").select("username").eq("id", uid).single(),
+        supabase.from("users").select("username, avatar_color").eq("id", uid).single(),
         supabase
           .from("friend_requests")
           .select(
@@ -50,6 +52,7 @@ export function GroupSidebar({ questionId, myChoice, optionA, optionB }: Props) 
       ]);
 
       setMyUsername(userRow.data?.username ?? null);
+      setMyColor((userRow.data as { avatar_color?: string | null } | null)?.avatar_color ?? null);
 
       type FriendRow = {
         from_user_id: string;
@@ -183,9 +186,7 @@ export function GroupSidebar({ questionId, myChoice, optionA, optionB }: Props) 
               {friendVotes.map((f) => (
                 <div key={f.userId} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-border-light flex items-center justify-center text-[10px] font-bold text-text-secondary">
-                      {f.username.slice(0, 2).toUpperCase()}
-                    </div>
+                    <Avatar seed={f.username} size={24} />
                     <span className="text-xs font-medium text-text-primary">{f.username}</span>
                   </div>
                   {f.choice ? (
@@ -210,9 +211,7 @@ export function GroupSidebar({ questionId, myChoice, optionA, optionB }: Props) 
               {/* You */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-dark flex items-center justify-center text-[10px] font-bold text-white">
-                    {myUsername ? myUsername.slice(0, 2).toUpperCase() : "YO"}
-                  </div>
+                  <Avatar seed={myUsername ?? "you"} color={myColor} size={24} />
                   <span className="text-xs font-medium text-text-primary">you</span>
                 </div>
                 {myChoice ? (
@@ -248,9 +247,7 @@ export function GroupSidebar({ questionId, myChoice, optionA, optionB }: Props) 
             {unvotedFriends.map((f) => (
               <div key={f.userId} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-border-light flex items-center justify-center text-[10px] font-bold text-text-secondary">
-                    {f.username.slice(0, 2).toUpperCase()}
-                  </div>
+                  <Avatar seed={f.username} size={24} />
                   <span className="text-xs font-medium text-text-primary">{f.username}</span>
                 </div>
                 <div className="flex gap-1.5">

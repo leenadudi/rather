@@ -12,6 +12,15 @@ export async function joinDebateQueue(questionId: string, side: "A" | "B"): Prom
     const input = parseOrThrow(joinDebateSchema, { questionId, side });
     const user = await requireAccount();
     const db = createServiceSupabase();
+    // Must have voted this side before debating it.
+    const { data: vote } = await db
+      .from("votes")
+      .select("id")
+      .eq("question_id", input.questionId)
+      .eq("user_id", user.id)
+      .eq("choice", input.side)
+      .maybeSingle();
+    if (!vote) throw new ActionError("not_voted", "vote on this question before debating");
     const { data, error } = await db.rpc("join_debate", {
       p_question_id: input.questionId,
       p_side: input.side,

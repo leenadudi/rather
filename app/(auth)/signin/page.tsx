@@ -1,34 +1,89 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { setUsername } from "@/lib/server/account";
+import { usernameToEmail } from "@/lib/usernameAuth";
+
+type Mode = "create" | "signin";
 
 export default function SigninPage() {
+  const router = useRouter();
+  const [mode, setMode] = useState<Mode>("create");
+  const [username, setUsernameInput] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  // email magic-link state
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
-  const [error, setError] = useState("");
 
   const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined;
 
+  async function handleUsernamePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    const u = username.trim().toLowerCase();
+    if (!/^[a-z0-9_]{3,20}$/.test(u)) {
+      setError("username must be 3–20 characters: letters, numbers, or _");
+      return;
+    }
+    if (password.length < 6) {
+      setError("password must be at least 6 characters");
+      return;
+    }
+
+    setBusy(true);
+    const synthEmail = usernameToEmail(u);
+
+    if (mode === "signin") {
+      const { error } = await supabase.auth.signInWithPassword({ email: synthEmail, password });
+      if (error) {
+        setError("wrong username or password");
+        setBusy(false);
+        return;
+      }
+      router.replace("/");
+      return;
+    }
+
+    // create account
+    const { data, error } = await supabase.auth.signUp({ email: synthEmail, password });
+    if (error) {
+      setError(/already registered/i.test(error.message) ? "that username is taken — try another" : error.message);
+      setBusy(false);
+      return;
+    }
+    // No session means email confirmation is still enabled in Supabase — with a
+    // synthetic address the account can never be confirmed.
+    if (!data.session) {
+      setError("account confirmation is enabled — disable “Confirm email” in Supabase to use username sign-up");
+      setBusy(false);
+      return;
+    }
+    // Claim the username for this account.
+    const res = await setUsername(u);
+    if (!res.ok) {
+      setError(res.code === "username_taken" ? "that username is taken — try another" : res.error);
+      await supabase.auth.signOut();
+      setBusy(false);
+      return;
+    }
+    router.replace("/");
+  }
+
   async function continueWithGoogle() {
     setError("");
-    const { data: { user } } = await supabase.auth.getUser();
-    // Anonymous user → link in place (keeps id + data). Otherwise sign in.
-    const fn = user?.is_anonymous
-      ? supabase.auth.linkIdentity({ provider: "google", options: { redirectTo } })
-      : supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } });
-    const { error } = await fn;
+    const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } });
     if (error) setError(error.message);
   }
 
   async function sendMagicLink(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    const { data: { user } } = await supabase.auth.getUser();
-    // Anonymous → attach email in place; else send a normal OTP sign-in link.
-    const { error } = user?.is_anonymous
-      ? await supabase.auth.updateUser({ email })
-      : await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
     if (error) setError(error.message);
     else setSent(true);
   }
@@ -36,16 +91,65 @@ export default function SigninPage() {
   return (
     <main className="min-h-screen bg-background flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-sm">
-        <h2 className="text-2xl font-bold text-text-primary mb-1">save your account</h2>
-        <p className="text-sm text-text-secondary mb-6">keep your votes, character cards, and friends across devices.</p>
+        <h2 className="text-2xl font-bold text-text-primary mb-1">
+          {mode === "create" ? "create your account" : "welcome back"}
+        </h2>
+        <p className="text-sm text-text-secondary mb-6">
+          {mode === "create"
+            ? "just a username and password — no email needed. unlock debates, friends, and your streak."
+            : "sign in with your username and password."}
+        </p>
 
-        <button onClick={continueWithGoogle} className="w-full flex items-center justify-center gap-3 py-3 bg-card border border-border rounded-xl text-sm font-medium text-text-primary hover:border-text-secondary transition-colors mb-6">
+        {/* mode toggle */}
+        <div className="flex gap-1 p-1 bg-card border border-border-light rounded-xl mb-5">
+          {(["create", "signin"] as Mode[]).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => { setMode(m); setError(""); }}
+              className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                mode === m ? "bg-dark text-white" : "text-text-secondary hover:text-text-primary"
+              }`}
+            >
+              {m === "create" ? "create account" : "sign in"}
+            </button>
+          ))}
+        </div>
+
+        <form onSubmit={handleUsernamePassword} className="flex flex-col gap-3 mb-6">
+          <input
+            value={username}
+            onChange={(e) => { setUsernameInput(e.target.value); setError(""); }}
+            placeholder="username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            className="w-full text-sm px-4 py-3 rounded-xl border border-border bg-card text-text-primary placeholder:text-text-muted focus:outline-none focus:border-text-secondary transition-colors"
+          />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => { setPassword(e.target.value); setError(""); }}
+            placeholder="password"
+            className="w-full text-sm px-4 py-3 rounded-xl border border-border bg-card text-text-primary placeholder:text-text-muted focus:outline-none focus:border-text-secondary transition-colors"
+          />
+          <button
+            type="submit"
+            disabled={busy}
+            className="w-full py-3 bg-dark text-white font-semibold rounded-xl disabled:opacity-50 hover:bg-text-secondary transition-colors"
+          >
+            {busy ? "…" : mode === "create" ? "create account" : "sign in"}
+          </button>
+        </form>
+
+        <div className="flex items-center gap-3 mb-5">
+          <div className="flex-1 h-px bg-border-light" />
+          <span className="text-xs text-text-muted">or use email / google</span>
+          <div className="flex-1 h-px bg-border-light" />
+        </div>
+
+        <button onClick={continueWithGoogle} className="w-full flex items-center justify-center gap-3 py-3 bg-card border border-border rounded-xl text-sm font-medium text-text-primary hover:border-text-secondary transition-colors mb-4">
           <GoogleIcon /> continue with google
         </button>
-
-        <div className="flex items-center gap-3 mb-6">
-          <div className="flex-1 h-px bg-border-light" /><span className="text-xs text-text-muted">or email me a link</span><div className="flex-1 h-px bg-border-light" />
-        </div>
 
         {sent ? (
           <p className="text-sm text-text-secondary bg-card border border-border-light rounded-xl px-4 py-3">check your email for a sign-in link.</p>
@@ -53,9 +157,10 @@ export default function SigninPage() {
           <form onSubmit={sendMagicLink} className="flex flex-col gap-3">
             <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com"
               className="w-full text-sm px-4 py-3 rounded-xl border border-border bg-card text-text-primary placeholder:text-text-muted focus:outline-none focus:border-text-secondary transition-colors" />
-            <button type="submit" className="w-full py-3 bg-dark text-white font-semibold rounded-xl hover:bg-text-secondary transition-colors">email me a link</button>
+            <button type="submit" className="w-full py-3 bg-card border border-border text-text-primary font-semibold rounded-xl hover:border-text-secondary transition-colors">email me a link</button>
           </form>
         )}
+
         {error && <p className="text-sm text-error bg-error-bg px-3 py-2 rounded-xl mt-4">{error}</p>}
       </div>
     </main>

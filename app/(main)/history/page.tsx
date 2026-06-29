@@ -100,7 +100,7 @@ export default function HistoryPage() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       const user = data.user;
-      if (!user || user.is_anonymous) { setLoading(false); return; }
+      if (!user) { setLoading(false); return; }
       setUserId(user.id);
       loadHistory(user.id);
     });

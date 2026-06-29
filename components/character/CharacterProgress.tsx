@@ -6,10 +6,20 @@ interface Props {
   voteCount: number;
   required?: number;
   sneak?: string;
+  // today's daily-question state, so the CTA doesn't tell someone who already
+  // voted to "vote today's question".
+  votedToday?: boolean;
+  hasTodayQuestion?: boolean;
 }
 
-export function CharacterProgress({ voteCount, required = 7, sneak }: Props) {
+export function CharacterProgress({ voteCount, required = 7, sneak, votedToday = false, hasTodayQuestion = true }: Props) {
   const dots = Array.from({ length: required }, (_, i) => i < voteCount);
+
+  const cta = !hasTodayQuestion
+    ? { label: "no question today — check back tomorrow", href: "/" }
+    : votedToday
+    ? { label: "see today's results →", href: "/" }
+    : { label: "vote today's question →", href: "/" };
 
   return (
     <div className="bg-dark rounded-3xl p-6 text-white">
@@ -37,10 +47,10 @@ export function CharacterProgress({ voteCount, required = 7, sneak }: Props) {
       )}
 
       <Link
-        href="/"
+        href={cta.href}
         className="block w-full text-center py-2.5 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold rounded-xl transition-colors"
       >
-        vote today&apos;s question →
+        {cta.label}
       </Link>
     </div>
   );

@@ -31,6 +31,8 @@ export default function ChooseUsernamePage() {
     const res = await setUsername(u);
     if (res.ok) {
       router.replace("/onboarding/friends");
+    } else if (res.code === "account_required") {
+      router.replace("/signin");
     } else {
       setError(res.error);
       setLoading(false);

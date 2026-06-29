@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ActionError } from "@/lib/server/result";
 
-const { requireAccount, update, single } = vi.hoisted(() => ({
+const { requireAccount, update, single, maybeSingle } = vi.hoisted(() => ({
   requireAccount: vi.fn(),
   update: vi.fn(),
   single: vi.fn(),
+  maybeSingle: vi.fn(),
 }));
 const rpc = vi.hoisted(() => vi.fn());
 const checkRateLimit = vi.hoisted(() => vi.fn());
@@ -13,36 +14,44 @@ const state: { debateRow: Record<string, unknown> | null; inserted: Record<strin
 vi.mock("@/lib/server/auth", () => ({ requireAccount }));
 vi.mock("@/lib/server/ratelimit", () => ({ checkRateLimit }));
 vi.mock("@/lib/server/supabase", () => ({
-  createServiceSupabase: () => ({
-    from: (_table: string) => ({
-      select: () => ({
-        eq: () => ({
-          eq: () => ({ not: () => ({ limit: () => ({ single: async () => ({ data: null }) }) }) }),
-          single: () => single(),
-        }),
+  createServiceSupabase: () => {
+    // chainable query stub: .eq()/.not()/.limit()/.order() return the chain;
+    // .single() / .maybeSingle() are the terminals the code awaits.
+    const chain: Record<string, unknown> = {
+      eq: () => chain,
+      not: () => chain,
+      limit: () => chain,
+      order: () => chain,
+      single: () => single(),
+      maybeSingle: () => maybeSingle(),
+    };
+    return {
+      from: (_table: string) => ({
+        select: () => chain,
+        insert: (row: Record<string, unknown>) => { state.inserted = row; return { select: () => ({ single: async () => ({ data: { id: "d1" }, error: null }) }) }; },
+        update: (row: unknown) => {
+          update(row);
+          return { eq: () => ({ eq: async () => ({ error: null }) }) };
+        },
       }),
-      insert: (row: Record<string, unknown>) => { state.inserted = row; return { select: () => ({ single: async () => ({ data: { id: "d1" }, error: null }) }) }; },
-      update: (row: unknown) => {
-        update(row);
-        return { eq: () => ({ eq: async () => ({ error: null }) }) };
-      },
-    }),
-    rpc: (...a: unknown[]) => rpc(...a),
-  }),
+      rpc: (...a: unknown[]) => rpc(...a),
+    };
+  },
 }));
 
 import { joinDebateQueue, sendDebateMessage, heartbeatQueue } from "@/lib/server/debates";
 
 beforeEach(() => {
-  [requireAccount, update, single].forEach((m) => m.mockReset());
+  [requireAccount, update, single, maybeSingle].forEach((m) => m.mockReset());
   rpc.mockReset();
   checkRateLimit.mockReset();
   state.debateRow = null;
   state.inserted = null;
-  requireAccount.mockResolvedValue({ id: "ua", isAnonymous: false });
+  requireAccount.mockResolvedValue({ id: "ua" });
   rpc.mockResolvedValue({ data: [{ debate_id: "d1", matched: true }], error: null });
   checkRateLimit.mockResolvedValue(undefined);
   single.mockResolvedValue({ data: { user_a_id: "ua", user_b_id: null } });
+  maybeSingle.mockResolvedValue({ data: { id: "v1" } }); // user has voted by default
 });
 
 describe("joinDebateQueue", () => {
@@ -75,6 +84,13 @@ describe("joinDebateQueue", () => {
     const r = await joinDebateQueue("11111111-1111-1111-1111-111111111111", "A");
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.code).toBe("account_required");
+    expect(rpc).not.toHaveBeenCalled();
+  });
+  it("rejects with not_voted (no rpc) when the user hasn't voted that side", async () => {
+    maybeSingle.mockResolvedValue({ data: null });
+    const r = await joinDebateQueue("11111111-1111-1111-1111-111111111111", "A");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("not_voted");
     expect(rpc).not.toHaveBeenCalled();
   });
 });

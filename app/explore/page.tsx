@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ensureSession } from "@/lib/anon";
+import { supabase } from "@/lib/supabase";
 import { getCommunityFeed, getCommunityStats } from "@/lib/community";
 import { CommunityCard } from "@/components/community/CommunityCard";
 import { SubmitModal } from "@/components/community/SubmitModal";
@@ -36,7 +36,8 @@ function ExploreContent() {
   }, []);
 
   useEffect(() => {
-    ensureSession().then((uid) => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      const uid = user?.id ?? null;
       setUserId(uid);
       load(uid, sort);
     });
@@ -154,19 +155,6 @@ function ExploreContent() {
               </div>
             )}
 
-            {/* CTA */}
-            <div className="bg-dark rounded-2xl p-5">
-              <p className="text-sm font-bold text-white mb-1">got a good one?</p>
-              <p className="text-xs text-white/60 leading-snug mb-4">
-                submit your own would you rather — the community votes and you watch the split happen
-              </p>
-              <button
-                onClick={() => setShowSubmit(true)}
-                className="w-full py-2.5 bg-white text-dark text-sm font-semibold rounded-xl hover:bg-white/90 transition-colors"
-              >
-                write a question →
-              </button>
-            </div>
           </aside>
         </div>
       </div>

@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { getTodayQuestion, getRecentQuestions } from "@/lib/questions";
 import { getMyVote, getVoteCounts } from "@/lib/votes";
 import { castVote } from "@/lib/server/votes";
-import { ensureSession } from "@/lib/anon";
+import { readLocalVote, writeLocalVote } from "@/lib/localVotes";
 import { getQueueCounts } from "@/lib/debates";
 import { getCommentCount } from "@/lib/comments";
 import { DebateCTA } from "@/components/vote/DebateCTA";
@@ -61,14 +61,18 @@ export default function HomePage() {
       if (!q) { setLoading(false); return; }
       setQuestion(q);
 
-      const uid = await ensureSession();
-      const [existing, voteCounts, queue, cc, recent] = await Promise.all([
-        getMyVote(q.id, uid),
+      const { data: { user } } = await supabase.auth.getUser();
+      const uid = user?.id ?? null;
+
+      const [voteCounts, queue, cc, recent] = await Promise.all([
         getVoteCounts(q.id),
         getQueueCounts(q.id),
         getCommentCount(q.id),
         getRecentQuestions(6),
       ]);
+
+      // Signed-in users get their vote from the server; visitors from this browser.
+      const existing = uid ? await getMyVote(q.id, uid) : readLocalVote(q.id);
 
       setMyChoice(existing);
       setCounts(voteCounts);
@@ -81,37 +85,39 @@ export default function HomePage() {
       const pastQ = recent.filter((r) => r.id !== q.id).slice(0, 4);
       setRecentQ(pastQ);
 
-      // Get votes for recent questions
-      if (pastQ.length > 0) {
-        const qIds = pastQ.map((r) => r.id);
-        const { data: rv } = await supabase
-          .from("votes")
-          .select("question_id, choice")
-          .eq("user_id", uid)
-          .in("question_id", qIds);
-        const vm: Record<string, Choice> = {};
-        for (const v of rv ?? []) vm[v.question_id] = v.choice as Choice;
-        setRecentVotes(vm);
-      }
-
-      const streakQuery = supabase
-        .from("votes")
-        .select("created_at")
-        .eq("user_id", uid)
-        .order("created_at", { ascending: false })
-        .limit(60);
-      const { data: svotes } = await streakQuery;
-      if (svotes?.length) {
-        const days = new Set(svotes.map((v) => new Date(v.created_at).toDateString()));
-        const today = new Date();
-        const start = days.has(today.toDateString()) ? today : new Date(today.getTime() - 86400000);
-        let s = 0;
-        const cursor = new Date(start);
-        while (days.has(cursor.toDateString())) {
-          s++;
-          cursor.setDate(cursor.getDate() - 1);
+      // Streak + per-question vote markers are account-only — visitors have no
+      // server-side vote history to read.
+      if (uid) {
+        if (pastQ.length > 0) {
+          const qIds = pastQ.map((r) => r.id);
+          const { data: rv } = await supabase
+            .from("votes")
+            .select("question_id, choice")
+            .eq("user_id", uid)
+            .in("question_id", qIds);
+          const vm: Record<string, Choice> = {};
+          for (const v of rv ?? []) vm[v.question_id] = v.choice as Choice;
+          setRecentVotes(vm);
         }
-        setStreak(s);
+
+        const { data: svotes } = await supabase
+          .from("votes")
+          .select("created_at")
+          .eq("user_id", uid)
+          .order("created_at", { ascending: false })
+          .limit(60);
+        if (svotes?.length) {
+          const days = new Set(svotes.map((v) => new Date(v.created_at).toDateString()));
+          const today = new Date();
+          const start = days.has(today.toDateString()) ? today : new Date(today.getTime() - 86400000);
+          let s = 0;
+          const cursor = new Date(start);
+          while (days.has(cursor.toDateString())) {
+            s++;
+            cursor.setDate(cursor.getDate() - 1);
+          }
+          setStreak(s);
+        }
       }
 
       setLoading(false);
@@ -137,7 +143,7 @@ export default function HomePage() {
   }, [question]);
 
   const handleVote = useCallback(async (choice: Choice) => {
-    if (!question || myChoice || !userId) return;
+    if (!question || myChoice) return;
     setMyChoice(choice);
     setSaving(choice);
     setSaveError(false);
@@ -147,6 +153,7 @@ export default function HomePage() {
       setSaveError(true);
       setSaving(null);
     } else {
+      if (!userId) writeLocalVote(question.id, choice, res.data.voteId);
       setSaving(null);
       setPendingChoice(null);
       setCounts(res.data);
@@ -154,7 +161,7 @@ export default function HomePage() {
   }, [question, myChoice, userId]);
 
   const handleRetry = useCallback(async () => {
-    if (!question || !pendingChoice || !userId) return;
+    if (!question || !pendingChoice) return;
     setSaveError(false);
     setSaving(pendingChoice);
     const res = await castVote(question.id, pendingChoice);
@@ -162,6 +169,7 @@ export default function HomePage() {
       setSaveError(true);
       setSaving(null);
     } else {
+      if (!userId) writeLocalVote(question.id, pendingChoice, res.data.voteId);
       setSaving(null);
       setPendingChoice(null);
       setCounts(res.data);
@@ -271,15 +279,6 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* Debating now */}
-            <div className="bg-card border border-border-light rounded-2xl p-4">
-              <div className="flex items-center gap-2 mb-0.5">
-                <span className="w-2 h-2 rounded-full bg-online inline-block" />
-                <p className="text-2xl font-bold text-text-primary">{queueCounts.a + queueCounts.b}</p>
-              </div>
-              <p className="text-xs text-text-muted">waiting to debate</p>
-            </div>
-
             {/* Recent questions */}
             {recentQ.length > 0 && (
               <div>
@@ -342,17 +341,19 @@ export default function HomePage() {
                   return (
                     <div key={opt.side}>
                       <div className="flex items-start justify-between gap-4 mb-2">
-                        <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex items-center gap-2.5 min-w-0">
                           {chosen && (
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${isA ? "bg-side-a text-white" : "bg-side-b text-white"}`}>
-                              ✓
+                            <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${isA ? "bg-side-a" : "bg-side-b"}`}>
+                              <svg className="w-3 h-3 text-white" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M16.704 5.29a1 1 0 010 1.42l-7.5 7.5a1 1 0 01-1.42 0l-3.5-3.5a1 1 0 011.42-1.42l2.79 2.8 6.79-6.8a1 1 0 011.42 0z" clipRule="evenodd" />
+                              </svg>
                             </span>
                           )}
-                          <p className={`text-sm font-medium leading-snug ${chosen ? "text-text-primary" : "text-text-secondary"}`}>
+                          <p className={`text-base font-medium leading-snug ${chosen ? "text-text-primary" : "text-text-secondary"}`}>
                             {opt.label}
                           </p>
                         </div>
-                        <span className={`text-2xl font-bold shrink-0 ${isA ? "text-side-a" : "text-side-b"} ${!chosen ? "opacity-40" : ""}`}>
+                        <span className={`text-3xl font-bold shrink-0 ${isA ? "text-side-a" : "text-side-b"}`}>
                           {opt.pct}%
                         </span>
                       </div>
@@ -377,17 +378,22 @@ export default function HomePage() {
               {myChoice && <><span>·</span><span>{countdown}</span></>}
             </div>
 
-            {/* Debate CTA */}
+            {/* Debate CTA — mobile only; on desktop it lives in the right sidebar */}
             {myChoice && question.debate_enabled !== false && (
-              <DebateCTA
-                questionId={question.id}
-                myChoice={myChoice}
-                oppositeCount={oppositeCount}
-              />
+              <div className="lg:hidden">
+                <DebateCTA
+                  questionId={question.id}
+                  myChoice={myChoice}
+                  oppositeCount={oppositeCount}
+                  optionA={question.option_a}
+                  optionB={question.option_b}
+                  hasAccount={!!userId}
+                />
+              </div>
             )}
 
-            {/* Comments */}
-            {myChoice && userId && (
+            {/* Comments — readable by everyone after voting; posting needs an account */}
+            {myChoice && (
               <CommentSection
                 questionId={question.id}
                 myChoice={myChoice}
@@ -406,6 +412,16 @@ export default function HomePage() {
 
           {/* ── Right sidebar ─────────────────────────────────── */}
           <aside className="hidden lg:block space-y-4">
+            {myChoice && question.debate_enabled !== false && (
+              <DebateCTA
+                questionId={question.id}
+                myChoice={myChoice}
+                oppositeCount={oppositeCount}
+                optionA={question.option_a}
+                optionB={question.option_b}
+                hasAccount={!!userId}
+              />
+            )}
             <GroupSidebar
               questionId={question.id}
               myChoice={myChoice}

@@ -43,7 +43,7 @@ export function QueueWait({ side, queueCounts, onCancel, optionA, optionB }: Pro
         finding an opponent{dots}
       </h2>
       <p className="text-sm text-text-secondary mb-6">
-        looking for someone who chose &ldquo;{oppLabel}&rdquo; to debate you
+        looking for someone who thinks {oppLabel} to debate you
       </p>
 
       {asymmetric && (
